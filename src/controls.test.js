@@ -22,11 +22,245 @@ test("tilt diagnostics distinguish missing API, insecure origin and denied permi
     assert.equal(controls.gyroStatus, "denied");
     window.DeviceOrientationEvent.requestPermission = async () => "granted";
     assert.equal(await controls.enableGyro(), true);
-    assert.equal(controls.gyroStatus, "enabled");
+    assert.equal(controls.gyroStatus, "waiting");
+    assert.equal(controls.gyroEnabled, false);
   } finally {
     controls.dispose();
     if (previous === undefined) delete globalThis.window;
     else globalThis.window = previous;
+  }
+});
+
+function sensorHarness({ orientation, motion, angle = 90 } = {}) {
+  const oldWindow = globalThis.window;
+  const oldScreen = globalThis.screen;
+  const listeners = new Map();
+  const orientationListeners = new Map();
+  globalThis.window = {
+    isSecureContext: true,
+    DeviceOrientationEvent: orientation,
+    DeviceMotionEvent: motion,
+    addEventListener(name, listener) {
+      listeners.set(name, listener);
+    },
+    removeEventListener(name, listener) {
+      if (listeners.get(name) === listener) listeners.delete(name);
+    },
+  };
+  globalThis.screen = {
+    orientation: {
+      angle,
+      addEventListener(name, listener) {
+        orientationListeners.set(name, listener);
+      },
+      removeEventListener(name, listener) {
+        if (orientationListeners.get(name) === listener)
+          orientationListeners.delete(name);
+      },
+    },
+  };
+  return {
+    emit(name, value) {
+      listeners.get(name)?.(value);
+    },
+    rotate(value) {
+      screen.orientation.angle = value;
+      orientationListeners.get("change")?.();
+    },
+    listeners,
+    restore() {
+      if (oldWindow === undefined) delete globalThis.window;
+      else globalThis.window = oldWindow;
+      if (oldScreen === undefined) delete globalThis.screen;
+      else globalThis.screen = oldScreen;
+    },
+  };
+}
+
+test("iOS permission methods are both called within the same activation", async () => {
+  const called = [];
+  const harness = sensorHarness({
+    orientation: {
+      requestPermission() {
+        called.push("orientation");
+        return Promise.resolve("granted");
+      },
+    },
+    motion: {
+      requestPermission() {
+        called.push("motion");
+        return Promise.resolve("granted");
+      },
+    },
+  });
+  const controls = new Controls(null);
+  try {
+    const request = controls.enableGyro();
+    assert.deepEqual(called, ["orientation", "motion"]);
+    assert.equal(await request, true);
+    assert.equal(controls.gyroStatus, "waiting");
+    const statuses = [];
+    controls.onGyroStatus = (status) => statuses.push(status);
+    harness.emit("deviceorientation", { beta: 0, gamma: 90 });
+    assert.equal(controls.gyroStatus, "enabled");
+    assert.equal(controls.gyroEnabled, true);
+    assert.ok(statuses.includes("enabled"));
+  } finally {
+    controls.dispose();
+    harness.restore();
+  }
+});
+
+test("orientation and motion independently activate; denied orientation falls back to motion", async () => {
+  const harness = sensorHarness({
+    orientation: { requestPermission: async () => "denied" },
+    motion: { requestPermission: async () => "granted" },
+  });
+  const controls = new Controls(null);
+  try {
+    assert.equal(await controls.enableGyro(), true);
+    assert.equal(harness.listeners.has("deviceorientation"), false);
+    assert.equal(harness.listeners.has("devicemotion"), true);
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: -9.8, y: 0, z: 0 },
+    });
+    assert.equal(controls.gyroStatus, "enabled");
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: null, y: null, z: null },
+    });
+    assert.ok(Number.isFinite(controls.gyro));
+  } finally {
+    controls.dispose();
+    harness.restore();
+  }
+});
+
+test("orientation-only permission works and 12-degree wheel turn steers right at landscape 90/270", async () => {
+  const harness = sensorHarness({
+    orientation: { requestPermission: async () => "granted" },
+  });
+  const controls = new Controls(null);
+  try {
+    assert.equal(await controls.enableGyro(), true);
+    harness.emit("deviceorientation", { beta: 0, gamma: 90 });
+    harness.emit("deviceorientation", { beta: -12, gamma: 90 });
+    const at90 = controls.gyro;
+    assert.ok(at90 > 0.35 && at90 < 0.65);
+    harness.rotate(270);
+    assert.equal(controls.gyroStatus, "waiting");
+    harness.emit("deviceorientation", { beta: 0, gamma: -90 });
+    harness.emit("deviceorientation", { beta: 12, gamma: -90 });
+    assert.ok(controls.gyro > 0.35 && controls.gyro < 0.65);
+  } finally {
+    controls.dispose();
+    harness.restore();
+  }
+});
+
+test("no sensor data times out and cleans up listeners", async () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let timeout;
+  globalThis.setTimeout = (callback) => {
+    timeout = callback;
+    return 1;
+  };
+  globalThis.clearTimeout = () => {};
+  const harness = sensorHarness({
+    motion: { requestPermission: async () => "granted" },
+  });
+  const controls = new Controls(null);
+  try {
+    assert.equal(await controls.enableGyro(), true);
+    harness.emit("devicemotion", { accelerationIncludingGravity: null });
+    assert.equal(controls.gyroStatus, "waiting");
+    timeout();
+    assert.equal(controls.gyroStatus, "no-data");
+    assert.equal(harness.listeners.has("devicemotion"), false);
+    assert.equal(controls.gyroEnabled, false);
+  } finally {
+    controls.dispose();
+    harness.restore();
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("motion gravity calibrates in both landscape directions and rejects bad samples", async () => {
+  const harness = sensorHarness({
+    motion: { requestPermission: async () => "granted" },
+  });
+  const controls = new Controls(null);
+  try {
+    assert.equal(await controls.enableGyro(), true);
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: -9.8, y: 0, z: 0 },
+    });
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: -9.58, y: -2.04, z: 0 },
+    });
+    const at90 = controls.gyro;
+    assert.ok(at90 > 0.35 && at90 < 0.65);
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: NaN, y: 0, z: 0 },
+    });
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: 100, y: 0, z: 0 },
+    });
+    assert.equal(controls.gyro, at90);
+    harness.rotate(270);
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: 9.8, y: 0, z: 0 },
+    });
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: 9.58, y: 2.04, z: 0 },
+    });
+    assert.ok(controls.gyro > 0.35 && controls.gyro < 0.65);
+  } finally {
+    controls.dispose();
+    harness.restore();
+  }
+});
+
+test("two denied sensor permissions leave tilt off", async () => {
+  const harness = sensorHarness({
+    orientation: { requestPermission: async () => "denied" },
+    motion: { requestPermission: async () => "denied" },
+  });
+  const controls = new Controls(null);
+  try {
+    assert.equal(await controls.enableGyro(), false);
+    assert.equal(controls.gyroStatus, "denied");
+    assert.equal(harness.listeners.has("deviceorientation"), false);
+    assert.equal(harness.listeners.has("devicemotion"), false);
+  } finally {
+    controls.dispose();
+    harness.restore();
+  }
+});
+
+test("flat sensor samples wait; roll crossing ±180 degrees stays finite and small", async () => {
+  const harness = sensorHarness({
+    motion: { requestPermission: async () => "granted" },
+  });
+  const controls = new Controls(null);
+  try {
+    assert.equal(await controls.enableGyro(), true);
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: 0, y: 0, z: -9.8 },
+    });
+    assert.equal(controls.gyroStatus, "waiting");
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: 9.8, y: 0.17, z: 0 },
+    });
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: 9.8, y: -0.17, z: 0 },
+    });
+    assert.ok(Math.abs(controls.gyro) < 0.2);
+    assert.ok(Number.isFinite(controls.gyro));
+  } finally {
+    controls.dispose();
+    harness.restore();
   }
 });
 

@@ -338,3 +338,56 @@ textarea:focus-visible {
     font-size: 10px;
   }
 }
+.tilt-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  border: 1px solid #82927666;
+  background: #13251eea;
+  padding: 14px;
+  margin: 10px 0;
+  max-width: 660px;
+  font: 13px/1.5 system-ui;
+}
+.tilt-feedback strong {
+  color: #eddfb7;
+}
+.tilt-feedback p {
+  font: 12px/1.5 system-ui;
+  margin: 5px 0;
+  max-width: 530px;
+}
+.tilt-dial {
+  width: 50px;
+  min-width: 50px;
+  height: 50px;
+  fill: none;
+  stroke: #daca9e;
+  stroke-width: 4;
+  transition: transform 80ms linear;
+}
+.tilt-recenter {
+  padding: 8px 12px;
+  margin: 5px 10px 0 0;
+  letter-spacing: 0.06em;
+}
+.tilt-safari-link {
+  display: inline-block;
+  color: #ddc994;
+  font: 12px system-ui;
+  margin: 8px 0;
+}
+button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+@media (max-height: 600px) {
+  .tilt-feedback {
+    padding: 9px;
+  }
+  .tilt-dial {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "simulatedSensors": true,
+  "physicalDeviceTested": false,
+  "engines": [
+    {
+      "engine": "chromium",
+      "permissionClick": {
+        "status": "waiting",
+        "enabled": false,
+        "calls": [
+          {
+            "kind": "orientation",
+            "active": true
+          },
+          {
+            "kind": "motion",
+            "active": true
+          }
+        ]
+      },
+      "enabled": {
+        "status": "enabled",
+        "steer": 0.4999999999999999,
+        "text": "Tilt steering is ready"
+      },
+      "recenter": true,
+      "landscape270": true,
+      "motionFallback": {
+        "status": "enabled",
+        "steer": 0.500884049317595
+      },
+      "denied": true,
+      "noData": true,
+      "errors": []
+    },
+    {
+      "engine": "webkit",
+      "permissionClick": {
+        "status": "waiting",
+        "enabled": false,
+        "calls": [
+          {
+            "kind": "orientation",
+            "active": true
+          },
+          {
+            "kind": "motion",
+            "active": true
+          }
+        ]
+      },
+      "enabled": {
+        "status": "enabled",
+        "steer": 0.4999999999999999,
+        "text": "Tilt steering is ready"
+      },
+      "recenter": true,
+      "landscape270": true,
+      "motionFallback": {
+        "status": "enabled",
+        "steer": 0.500884049317595
+      },
+      "denied": true,
+      "noData": true,
+      "errors": []
+    }
+  ]
+}

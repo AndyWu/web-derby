@@ -227,21 +227,68 @@ $("#back").onclick = () => {
 $("#start").onclick = start;
 $("#pause").onclick = garage;
 $("#again").onclick = garage;
-function tiltMessage() {
-  return (
-    {
-      enabled: "Tilt steering enabled",
-      unsupported: "No motion API — use A / D or touch",
-      insecure: "Open the HTTPS app in Safari for tilt",
-      denied: "Motion permission denied — allow it in Safari",
-      blocked: "Motion access blocked — try Safari on iPad",
-    }[controls.gyroStatus] || "Enable tilt steering"
-  );
+function refreshTiltUI(state = controls.gyroStatus) {
+  const labels = {
+    requesting: "Allow motion in the iOS prompt",
+    waiting: "Hold centered — waiting for motion…",
+    enabled: "Tilt steering is ready",
+    "no-data": "No sensor readings — retry motion",
+    unsupported: "Motion is not exposed by this browser",
+    insecure: "Tilt needs the HTTPS game",
+    denied: "Motion permission was denied",
+    blocked: "This browser blocked motion access",
+  };
+  const help = {
+    requesting: "Choose Allow when iOS asks to access motion and orientation.",
+    waiting:
+      "Hold your iPhone or iPad in landscape, like a steering wheel. Keep it centered for the first reading.",
+    enabled:
+      "Turn your device gently. The wheel below follows real sensor readings. Recenter whenever you change your grip.",
+    "no-data":
+      "Permission may be granted, but no usable readings arrived. Try again in Safari on the device, outside an embedded browser.",
+    unsupported:
+      "For iPhone or iPad steering, open the game directly in Safari. Desktop testing supports A / D and touch steering.",
+    insecure:
+      "Open the published HTTPS game directly in Safari, then enable motion.",
+    denied:
+      "Motion access must be allowed by iOS. Open this game directly in Safari and retry; a saved denial may need changing in the website’s permissions.",
+    blocked:
+      "An embedded browser or its permissions policy may block motion. Open the game directly in Safari and tap Enable tilt.",
+  };
+  const active = ["requesting", "waiting", "enabled"].includes(state);
+  for (const id of ["gyro", "guide-tilt"]) {
+    const button = $("#" + id);
+    if (button) {
+      button.disabled = state === "requesting";
+      button.textContent =
+        state === "requesting"
+          ? "Requesting motion…"
+          : state === "enabled"
+            ? "Tilt enabled — recenter"
+            : "Enable iOS tilt steering";
+    }
+  }
+  document.querySelectorAll(".tilt-feedback").forEach((panel) => {
+    panel.classList.toggle("hidden", state === "not-enabled");
+    panel.querySelector(".tilt-feedback-title").textContent =
+      labels[state] || "Enable iOS tilt steering";
+    panel.querySelector(".tilt-feedback-copy").textContent = help[state] || "";
+    panel
+      .querySelector(".tilt-recenter")
+      .classList.toggle("hidden", !["enabled", "waiting"].includes(state));
+    panel.querySelector(".tilt-safari-link").classList.toggle("hidden", active);
+  });
 }
-$("#gyro").onclick = async () => {
-  await controls.enableGyro();
-  $("#gyro").textContent = tiltMessage();
-};
+// The permission APIs must be invoked directly in the click handler's activation.
+function requestTilt() {
+  if (controls.gyroStatus === "enabled") {
+    controls.recalibrate();
+    return Promise.resolve(true);
+  }
+  const request = controls.enableGyro();
+  return request.then(() => refreshTiltUI());
+}
+$("#gyro").onclick = requestTilt;
 $("#family-btn").onclick = () => showModal($("#lobby"));
 $("#close-lobby").onclick = () => {
   hideModal($("#lobby"));
@@ -263,10 +310,15 @@ guide.className = "modal hidden";
 guide.innerHTML =
   '<div class="eyebrow">Before the starting bell</div><h2>Both hands on the wheel.</h2><p>Hold your device in landscape, centered and comfortable. Enable tilt, then turn it like a steering wheel. Swipe upward with each thumb to push the paddles. Hold the bottom-left for the brake. Tap the bottom-right for the lamp, or hold it to shift between forward and reverse.</p><div class="actions"><button id="guide-tilt">Enable tilt while centered</button><button class="primary" id="hands-ready">Hands ready — roll out</button></div>';
 document.body.append(guide);
-$("#guide-tilt").onclick = async () => {
-  await controls.enableGyro();
-  $("#guide-tilt").textContent = tiltMessage();
-};
+const tiltPanel = () =>
+  `<div class="tilt-feedback hidden"><svg class="tilt-dial" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26"/><circle cx="32" cy="32" r="6"/><path d="M8 22 27 30M56 22 37 30M32 38v20"/></svg><div><strong class="tilt-feedback-title" role="status" aria-live="polite"></strong><p class="tilt-feedback-copy"></p><button class="tilt-recenter hidden" type="button">Recenter wheel</button><a class="tilt-safari-link hidden" href="https://hollow-run-soapbox-derby.andycswu.chatgpt.site/" target="_blank" rel="noopener">Game link to open in Safari ↗</a></div></div>`;
+$("#garage .actions").insertAdjacentHTML("afterend", tiltPanel());
+$("#drive-guide .actions").insertAdjacentHTML("afterend", tiltPanel());
+document
+  .querySelectorAll(".tilt-recenter")
+  .forEach((button) => (button.onclick = () => controls.recalibrate()));
+controls.onGyroStatus = refreshTiltUI;
+$("#guide-tilt").onclick = requestTilt;
 $("#hands-ready").onclick = () => {
   localStorage.setItem("derby-controls-seen", "1");
   hideModal(guide);
@@ -568,6 +620,11 @@ function animate(now) {
   last = now;
   clockTime += dt;
   const input = controls.update(dt);
+  document
+    .querySelectorAll(".tilt-dial")
+    .forEach(
+      (dial) => (dial.style.transform = `rotate(${-controls.gyro * 65}deg)`),
+    );
   if (running) {
     const local = net.role === "guest" ? guestIndex : 0;
     startDelay = Math.max(0, startDelay - dt);
@@ -709,6 +766,7 @@ function animate(now) {
     }
   } else {
     audio.update(0, "dirt", false, dt);
+    if (car?.userData.wheel) car.userData.wheel.rotation.z = -input.steer * 0.7;
     camera.position.set(11, 3, -9);
     camera.lookAt(1, 0.3, -24);
     graphics.update(clockTime, 0, car);

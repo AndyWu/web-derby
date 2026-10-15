@@ -1,4 +1,26 @@
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const radians = Math.PI / 180;
+const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+
+function screenAngle() {
+  const raw =
+    globalThis.screen?.orientation?.angle ??
+    globalThis.window?.orientation ??
+    0;
+  return (((Number(raw) || 0) % 360) + 360) % 360;
+}
+
+function gravityRoll(x, y, z) {
+  if (![x, y, z].every(Number.isFinite) || Math.hypot(x, y, z) < 0.15)
+    return null;
+  const angle = screenAngle() * radians;
+  const sx = x * Math.cos(angle) + y * Math.sin(angle);
+  const sy = -x * Math.sin(angle) + y * Math.cos(angle);
+  // A wheel is upright when gravity points toward the bottom of the screen.
+  // Depth is irrelevant; an almost flat phone has no usable steering plane.
+  if (Math.hypot(sx, sy) < 0.15) return null;
+  return Math.atan2(-sx, sy);
+}
 
 export class Controls {
   constructor(canvas) {
@@ -18,6 +40,12 @@ export class Controls {
     this._gyroBaseline = null;
     this.gyroEnabled = false;
     this.gyroStatus = "not-enabled";
+    this._sensorListening = false;
+    this._orientationListening = false;
+    this._motionListening = false;
+    this._gyroTimer = null;
+    this._lastOrientationSample = -Infinity;
+    this._sensorSource = null;
     this._headlightLatch = false;
     this._reverseLatch = false;
     this._touchPulse = { leftPaddle: 0, rightPaddle: 0 };
@@ -86,19 +114,35 @@ export class Controls {
       this.pointers.delete(event.pointerId);
     };
     this._onOrientation = (event) => {
-      const angle = Number(
-        (typeof screen !== "undefined"
-          ? screen.orientation?.angle
-          : undefined) ??
-          window.orientation ??
-          0,
+      if (!Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
+      const beta = event.beta * radians;
+      const gamma = event.gamma * radians;
+      // Project gravity in device coordinates, avoiding Euler angle wrap at ±180°.
+      const roll = gravityRoll(
+        -Math.cos(beta) * Math.sin(gamma),
+        Math.sin(beta),
+        Math.cos(beta) * Math.cos(gamma),
       );
-      const tilt = Math.abs(angle) === 90 ? event.beta : event.gamma;
-      if (!Number.isFinite(tilt)) return;
-      const signedTilt = angle === 90 ? -tilt : tilt;
-      if (this._gyroBaseline === null) this._gyroBaseline = signedTilt;
-      this.gyro = clamp((signedTilt - this._gyroBaseline) / 24, -1, 1);
+      if (roll === null) return;
+      this._lastOrientationSample = performance.now();
+      this._receiveRoll(roll, "orientation");
     };
+    this._onMotion = (event) => {
+      const gravity = event.accelerationIncludingGravity;
+      if (!gravity) return;
+      if (![gravity.x, gravity.y, gravity.z].every(Number.isFinite)) return;
+      if (
+        Math.hypot(gravity.x, gravity.y, gravity.z) < 3 ||
+        Math.hypot(gravity.x, gravity.y, gravity.z) > 20
+      )
+        return;
+      const roll = gravityRoll(gravity.x, gravity.y, gravity.z);
+      if (roll === null) return;
+      // Prefer orientation when both fire; motion remains a live fallback.
+      if (performance.now() - this._lastOrientationSample < 500) return;
+      this._receiveRoll(roll, "motion");
+    };
+    this._onScreenOrientationChange = () => this.recalibrate();
     if (typeof window !== "undefined") {
       window.addEventListener("keydown", this._onKeyDown);
       window.addEventListener("keyup", this._onKeyUp);
@@ -113,35 +157,150 @@ export class Controls {
     }
   }
 
+  _setGyroStatus(status) {
+    if (this.gyroStatus === status) return;
+    this.gyroStatus = status;
+    this.onGyroStatus?.(status);
+  }
+
+  _clearGyroTimer() {
+    if (this._gyroTimer !== null) clearTimeout(this._gyroTimer);
+    this._gyroTimer = null;
+  }
+
+  _stopGyroListeners() {
+    this._clearGyroTimer();
+    if (typeof window !== "undefined") {
+      if (this._orientationListening)
+        window.removeEventListener("deviceorientation", this._onOrientation);
+      if (this._motionListening)
+        window.removeEventListener("devicemotion", this._onMotion);
+      window.removeEventListener(
+        "orientationchange",
+        this._onScreenOrientationChange,
+      );
+    }
+    globalThis.screen?.orientation?.removeEventListener?.(
+      "change",
+      this._onScreenOrientationChange,
+    );
+    this._orientationListening = false;
+    this._motionListening = false;
+    this._sensorListening = false;
+    this.gyroEnabled = false;
+    this.gyro = 0;
+  }
+
+  _receiveRoll(roll, source) {
+    if (!this._sensorListening) return;
+    if (this._sensorSource !== source) {
+      this._sensorSource = source;
+      this._gyroBaseline = null;
+    }
+    if (this._gyroBaseline === null) this._gyroBaseline = roll;
+    this.gyro = clamp(
+      wrapAngle(roll - this._gyroBaseline) / (24 * radians),
+      -1,
+      1,
+    );
+    this.gyroEnabled = true;
+    this._clearGyroTimer();
+    this._setGyroStatus("enabled");
+  }
+
+  recalibrate() {
+    this._gyroBaseline = null;
+    this._lastOrientationSample = -Infinity;
+    this._sensorSource = null;
+    this.gyro = 0;
+    this.gyroEnabled = false;
+    if (!this._sensorListening) return false;
+    this._setGyroStatus("waiting");
+    this._clearGyroTimer();
+    this._gyroTimer = setTimeout(() => {
+      if (this.gyroStatus === "waiting") {
+        this._stopGyroListeners();
+        this._setGyroStatus("no-data");
+      }
+    }, 2500);
+    this._gyroTimer.unref?.();
+    return true;
+  }
+
   async enableGyro() {
-    if (typeof window === "undefined" || !window.DeviceOrientationEvent) {
-      this.gyroStatus = "unsupported";
+    if (
+      typeof window === "undefined" ||
+      (!window.DeviceOrientationEvent && !window.DeviceMotionEvent)
+    ) {
+      this._setGyroStatus("unsupported");
       return false;
     }
     if (window.isSecureContext === false) {
-      this.gyroStatus = "insecure";
+      this._setGyroStatus("insecure");
       return false;
     }
-    try {
-      const orientation = window.DeviceOrientationEvent;
-      if (typeof orientation.requestPermission === "function") {
-        const permission = await orientation.requestPermission();
-        if (permission !== "granted") {
-          this.gyroStatus = "denied";
-          return false;
-        }
+    if (this._sensorListening) return true;
+    this._setGyroStatus("requesting");
+    const requests = [];
+    // Invoke both APIs before awaiting either: iOS requires transient activation.
+    for (const [kind, api] of [
+      ["orientation", window.DeviceOrientationEvent],
+      ["motion", window.DeviceMotionEvent],
+    ]) {
+      if (!api) continue;
+      try {
+        const result =
+          typeof api.requestPermission === "function"
+            ? api.requestPermission()
+            : "granted";
+        requests.push({ kind, promise: Promise.resolve(result) });
+      } catch (error) {
+        requests.push({ kind, promise: Promise.reject(error) });
       }
-      if (!this.gyroEnabled)
-        window.addEventListener("deviceorientation", this._onOrientation);
-      this._gyroBaseline = null;
-      this.gyroEnabled = true;
-      this.gyroStatus = "enabled";
-      return true;
-    } catch (error) {
-      this.gyroStatus =
-        error?.name === "NotAllowedError" ? "denied" : "blocked";
+    }
+    const results = await Promise.allSettled(
+      requests.map((request) => request.promise),
+    );
+    const granted = new Set(
+      results.flatMap((result, index) =>
+        result.status === "fulfilled" && result.value === "granted"
+          ? [requests[index].kind]
+          : [],
+      ),
+    );
+    if (!granted.size) {
+      const denied =
+        results.some(
+          (result) =>
+            result.status === "fulfilled" && result.value === "denied",
+        ) ||
+        results.some(
+          (result) =>
+            result.status === "rejected" &&
+            result.reason?.name === "NotAllowedError",
+        );
+      this._setGyroStatus(denied ? "denied" : "blocked");
       return false;
     }
+    if (granted.has("orientation")) {
+      window.addEventListener("deviceorientation", this._onOrientation);
+      this._orientationListening = true;
+    }
+    if (granted.has("motion")) {
+      window.addEventListener("devicemotion", this._onMotion);
+      this._motionListening = true;
+    }
+    window.addEventListener(
+      "orientationchange",
+      this._onScreenOrientationChange,
+    );
+    globalThis.screen?.orientation?.addEventListener?.(
+      "change",
+      this._onScreenOrientationChange,
+    );
+    this._sensorListening = true;
+    this.recalibrate();
+    return true;
   }
 
   // Lets HTML controls feed the same input object without duplicating listeners.
@@ -207,11 +366,11 @@ export class Controls {
   }
 
   dispose() {
+    this._stopGyroListeners();
     if (typeof window !== "undefined") {
       window.removeEventListener("keydown", this._onKeyDown);
       window.removeEventListener("keyup", this._onKeyUp);
       window.removeEventListener("blur", this._onBlur);
-      window.removeEventListener("deviceorientation", this._onOrientation);
     }
     this.canvas?.removeEventListener("pointerdown", this._onPointerDown);
     this.canvas?.removeEventListener("pointermove", this._onPointerMove);

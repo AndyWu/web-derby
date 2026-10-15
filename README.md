@@ -23,3 +23,7 @@ This is a playable procedural prototype, not Last of Us visual fidelity. Paid Fa
 `npm test` covers physics, contacts, reverse gearing, input handling, AI full-course racing and Hermite interpolation. `node scripts/verify.mjs` provides focused browser modes: visual, mobile, scenes, network, controls, game and offline. Offline checks use a production preview on port 4173; isolated network checks use the development server on port 5173. The `DERBY_URL` and `DERBY_ROUND` environment variables select the target and evidence filenames.
 
 Browser evidence also covers a real six-peer WebRTC star on one machine, QR pixel round-trips, guest truck rosters, disconnect takeover, and six signed demo profiles in IndexedDB. Loopback testing does not establish radio latency, Safari permissions, or six-device rendering performance. The physics combines road-guided travel with Cannon spring/contact suspension; water uses animated material and sky reflections rather than screen-space scene reflections. Models and scenery are procedural assets.
+
+### iOS tilt steering
+
+Open the HTTPS game directly in Safari on iPhone or iPad. Tap **Enable iOS tilt steering**, allow motion access, then hold the device upright in landscape until tilt steering is ready. Turn it like a steering wheel; use **Recenter** at a comfortable neutral position. Both landscape directions and accelerometer fallback are supported. Embedded browsers may block motion access. Automated Chromium and WebKit checks use simulated sensors; physical iOS validation remains necessary.
