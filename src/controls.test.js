@@ -2,6 +2,34 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Controls } from "./controls.js";
 
+test("tilt diagnostics distinguish missing API, insecure origin and denied permission", async () => {
+  const previous = globalThis.window;
+  globalThis.window = {
+    addEventListener() {},
+    removeEventListener() {},
+    isSecureContext: true,
+  };
+  const controls = new Controls(null);
+  try {
+    assert.equal(await controls.enableGyro(), false);
+    assert.equal(controls.gyroStatus, "unsupported");
+    window.DeviceOrientationEvent = { requestPermission: async () => "denied" };
+    window.isSecureContext = false;
+    assert.equal(await controls.enableGyro(), false);
+    assert.equal(controls.gyroStatus, "insecure");
+    window.isSecureContext = true;
+    assert.equal(await controls.enableGyro(), false);
+    assert.equal(controls.gyroStatus, "denied");
+    window.DeviceOrientationEvent.requestPermission = async () => "granted";
+    assert.equal(await controls.enableGyro(), true);
+    assert.equal(controls.gyroStatus, "enabled");
+  } finally {
+    controls.dispose();
+    if (previous === undefined) delete globalThis.window;
+    else globalThis.window = previous;
+  }
+});
+
 const fakeCanvas = () => ({
   style: {},
   addEventListener() {},

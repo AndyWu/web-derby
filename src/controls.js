@@ -17,6 +17,7 @@ export class Controls {
     this.gyro = 0;
     this._gyroBaseline = null;
     this.gyroEnabled = false;
+    this.gyroStatus = "not-enabled";
     this._headlightLatch = false;
     this._reverseLatch = false;
     this._touchPulse = { leftPaddle: 0, rightPaddle: 0 };
@@ -113,20 +114,32 @@ export class Controls {
   }
 
   async enableGyro() {
-    if (typeof window === "undefined" || !window.DeviceOrientationEvent)
+    if (typeof window === "undefined" || !window.DeviceOrientationEvent) {
+      this.gyroStatus = "unsupported";
       return false;
+    }
+    if (window.isSecureContext === false) {
+      this.gyroStatus = "insecure";
+      return false;
+    }
     try {
       const orientation = window.DeviceOrientationEvent;
       if (typeof orientation.requestPermission === "function") {
         const permission = await orientation.requestPermission();
-        if (permission !== "granted") return false;
+        if (permission !== "granted") {
+          this.gyroStatus = "denied";
+          return false;
+        }
       }
       if (!this.gyroEnabled)
         window.addEventListener("deviceorientation", this._onOrientation);
       this._gyroBaseline = null;
       this.gyroEnabled = true;
+      this.gyroStatus = "enabled";
       return true;
-    } catch {
+    } catch (error) {
+      this.gyroStatus =
+        error?.name === "NotAllowedError" ? "denied" : "blocked";
       return false;
     }
   }

@@ -1,53 +1,55 @@
+import { createReferenceVehicle } from "./reference-vehicles.js";
+
 // Ten salvaged downhill machines. All dimensions are in metres; the driver
 // looks toward -Z from just behind the dash.
 export const VEHICLES = [
   {
-    name: "Red Barn Rocket",
-    subtitle: "A hay wagon with delusions of speed",
-    trait: "Balanced weight and steady steering",
-    color: 0xb94d36,
-    mass: 94,
-    drag: 0.81,
-    grip: 0.91,
-    handling: 1.04,
+    name: "Skipper 14",
+    subtitle: "A vintage crate on tall wire wheels",
+    trait: "Long wheelbase and steady turns",
+    color: 0xba915f,
+    mass: 93,
+    drag: 0.86,
+    grip: 0.95,
+    handling: 0.95,
     topSpeed: 43,
     paddleForce: 3.1,
   },
   {
-    name: "Blue Moon",
-    subtitle: "Milk crates and midnight engineering",
-    trait: "Light paddling, quick turns, loose grip",
-    color: 0x507c9c,
-    mass: 79,
-    drag: 0.72,
-    grip: 0.84,
-    handling: 1.22,
+    name: "Bare Bones",
+    subtitle: "A seat and four wheels on bare timber",
+    trait: "Very light with quick, lively steering",
+    color: 0xbd995c,
+    mass: 69,
+    drag: 0.73,
+    grip: 0.83,
+    handling: 1.38,
     topSpeed: 46,
+    paddleForce: 3.6,
+  },
+  {
+    name: "Blue Barrel",
+    subtitle: "A plastic drum with bicycle wheels",
+    trait: "Buoyant feel and nimble acceleration",
+    color: 0x247dcc,
+    mass: 80,
+    drag: 0.89,
+    grip: 0.88,
+    handling: 1.17,
+    topSpeed: 44,
     paddleForce: 3.4,
   },
   {
-    name: "Cornhusker",
-    subtitle: "The harvest comes downhill",
-    trait: "Heavy and planted through rough bends",
-    color: 0xdbad42,
-    mass: 112,
-    drag: 0.94,
-    grip: 1.12,
-    handling: 0.83,
-    topSpeed: 39,
-    paddleForce: 2.9,
-  },
-  {
-    name: "Tin Lizzy",
-    subtitle: "A hundred dents, one good axle",
-    trait: "Fast roll with nimble steering",
-    color: 0x879b93,
-    mass: 87,
-    drag: 0.69,
-    grip: 0.96,
-    handling: 1.13,
-    topSpeed: 47,
-    paddleForce: 3.2,
+    name: "Sunshine Kart",
+    subtitle: "A bright backyard racer built for fun",
+    trait: "Low center of gravity and easy grip",
+    color: 0xe7bb37,
+    mass: 86,
+    drag: 0.75,
+    grip: 1.05,
+    handling: 1.15,
+    topSpeed: 45,
+    paddleForce: 3.3,
   },
   {
     name: "Blackberry Jam",
@@ -227,6 +229,7 @@ function paintedLabel(THREE, words) {
 export function createVehicle(THREE, index = 0, cockpit = false) {
   const id = ((index % VEHICLES.length) + VEHICLES.length) % VEHICLES.length;
   const spec = VEHICLES[id];
+  if (id < 4) return createReferenceVehicle(THREE, id, cockpit, spec);
   const group = new THREE.Group();
   group.name = spec.name;
   const mat = (color, metalness = 0, roughness = 0.86) =>

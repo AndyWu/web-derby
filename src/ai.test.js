@@ -117,7 +117,9 @@ test("Ace gets the strongest draft from a nearby car ahead", () => {
 
 test("all five rivals finish the real course within fifteen simulated minutes", () => {
   const racers = AI_DRIVERS.map((_, index) =>
-    createRacer(VEHICLES[index], index + 1),
+    // Hold the chassis constant so this checks driver personalities rather
+    // than depending on which cars happen to occupy the first garage slots.
+    createRacer(VEHICLES[4], index + 1),
   );
   const player = createRacer(VEHICLES[5], 0);
   const pack = [player, ...racers];

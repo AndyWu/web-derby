@@ -227,10 +227,20 @@ $("#back").onclick = () => {
 $("#start").onclick = start;
 $("#pause").onclick = garage;
 $("#again").onclick = garage;
+function tiltMessage() {
+  return (
+    {
+      enabled: "Tilt steering enabled",
+      unsupported: "No motion API — use A / D or touch",
+      insecure: "Open the HTTPS app in Safari for tilt",
+      denied: "Motion permission denied — allow it in Safari",
+      blocked: "Motion access blocked — try Safari on iPad",
+    }[controls.gyroStatus] || "Enable tilt steering"
+  );
+}
 $("#gyro").onclick = async () => {
-  $("#gyro").textContent = (await controls.enableGyro())
-    ? "Tilt steering enabled"
-    : "Tilt unavailable — use touch / keys";
+  await controls.enableGyro();
+  $("#gyro").textContent = tiltMessage();
 };
 $("#family-btn").onclick = () => showModal($("#lobby"));
 $("#close-lobby").onclick = () => {
@@ -254,9 +264,8 @@ guide.innerHTML =
   '<div class="eyebrow">Before the starting bell</div><h2>Both hands on the wheel.</h2><p>Hold your device in landscape, centered and comfortable. Enable tilt, then turn it like a steering wheel. Swipe upward with each thumb to push the paddles. Hold the bottom-left for the brake. Tap the bottom-right for the lamp, or hold it to shift between forward and reverse.</p><div class="actions"><button id="guide-tilt">Enable tilt while centered</button><button class="primary" id="hands-ready">Hands ready — roll out</button></div>';
 document.body.append(guide);
 $("#guide-tilt").onclick = async () => {
-  $("#guide-tilt").textContent = (await controls.enableGyro())
-    ? "Centered — tilt to steer"
-    : "Tilt unavailable — swipe sideways to steer";
+  await controls.enableGyro();
+  $("#guide-tilt").textContent = tiltMessage();
 };
 $("#hands-ready").onclick = () => {
   localStorage.setItem("derby-controls-seen", "1");
