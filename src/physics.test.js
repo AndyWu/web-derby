@@ -171,3 +171,19 @@ test("upward touch slows before reversing slowly; handbrake holds and cancels bo
   for (let i=0;i<4*60;i++) stepRacer(racer, { touchDrive:true }, 1/60, road, surface);
   assert.ok(racer.speed > 0 && racer.speed < 5);
 });
+
+
+test("fast swipes accelerate harder and sustain higher speed than gentle swipes", () => {
+  const road=s=>({x:0,y:-s*0.06,z:-s,width:8});
+  const surface=()=>({drag:0.13,grip:1});
+  const racers=[createRacer(),createRacer()];
+  for(const [i,r] of racers.entries()) {
+    r.s=100;
+    stepRacer(r,{touchDrive:true,swipeDirection:1,swipeStrength:i},1/60,road,surface);
+    for(let n=0;n<60;n++)stepRacer(r,{touchDrive:true},1/60,road,surface);
+  }
+  assert.ok(racers[1].speed>racers[0].speed+3);
+  for(const r of racers)for(let n=0;n<7*60;n++)stepRacer(r,{touchDrive:true},1/60,road,surface);
+  assert.ok(racers[1].speed>racers[0].speed+7);
+  assert.ok(racers.every(r=>r._boostTime>1));
+});

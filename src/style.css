@@ -405,9 +405,7 @@ button:disabled {
 .braking .swipe-zone { background:#bc76395c; border-color:#f9c88cbb; }
 .brake-feedback { position:absolute; bottom:27%; width:100%; text-align:center; color:#ffe2ab; font-size:10px; letter-spacing:2px; opacity:0; }
 .braking .brake-feedback { opacity:1; }
-#dashboard-light { position:absolute; bottom:max(16px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); pointer-events:auto; display:flex; align-items:center; gap:9px; background:#282c26cc; border:1px solid #c3b58c77; border-radius:8px; padding:11px 16px; color:#e7dcbc; font-size:10px; letter-spacing:2px; box-shadow:0 3px 12px #0005; }
-#dashboard-light span { font-size:20px; }
-#dashboard-light b { font-size:9px; color:#b6b8a2; }
-#dashboard-light[aria-pressed="true"] { background:#5b532fd9; border-color:#ffe2a2; }
-#dashboard-light[aria-pressed="true"] b { color:#ffe6a3; }
-@media(max-height:450px) { .swipe-zone { top:28%; bottom:17%; gap:4px; border-radius:22px; } .swipe-zone i { height:9px; } #dashboard-light { padding:7px 13px; } #race-rank { font-size:26px; padding:6px 12px; } }
+#dashboard-light { position:absolute; pointer-events:auto; background:transparent; border:0; padding:0; margin:0; box-shadow:none; border-radius:5px; transform:none; cursor:pointer; touch-action:manipulation; }
+#dashboard-light:hover, #dashboard-light:active { background:transparent; }
+#dashboard-light:focus-visible { outline:2px solid #ffe6a3; outline-offset:3px; }
+@media(max-height:450px) { .swipe-zone { top:28%; bottom:17%; gap:4px; border-radius:22px; } .swipe-zone i { height:9px; } #race-rank { font-size:26px; padding:6px 12px; } }

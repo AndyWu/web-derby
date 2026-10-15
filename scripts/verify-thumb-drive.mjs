@@ -13,7 +13,7 @@ for (const [name, engine] of [['chromium',chromium],['webkit',webkit]]) {
     await page.addInitScript(()=>localStorage.setItem('derby-controls-seen','1'));
     page.setDefaultTimeout(20000);
     console.log(name, 'loading');
-    await page.goto('http://localhost:5173');
+    await page.goto(process.env.DERBY_URL || 'http://localhost:5173');
     await page.waitForFunction(()=>!!window.__derby);
     await page.evaluate(()=>window.__derby.renderEnabled=false);
     await page.evaluate(()=>window.__derby.start(true));

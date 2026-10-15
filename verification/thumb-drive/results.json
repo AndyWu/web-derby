@@ -1,7 +1,7 @@
 [
   {
     "engine": "chromium",
-    "forwardSpeedAfterOneSecond": 5.919211280504351,
+    "forwardSpeedAfterOneSecond": 10.383595146588254,
     "upwardReverse": true,
     "dualThumbBrake": true,
     "headlight": true,
@@ -10,7 +10,7 @@
   },
   {
     "engine": "webkit",
-    "forwardSpeedAfterOneSecond": 5.900434604848086,
+    "forwardSpeedAfterOneSecond": 10.285274694896835,
     "upwardReverse": true,
     "dualThumbBrake": true,
     "headlight": true,

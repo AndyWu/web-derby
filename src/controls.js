@@ -33,6 +33,7 @@ export class Controls {
       reverse: false,
       headlight: false,
       swipeDirection: 0,
+      swipeStrength: 0.5,
       touchDrive: false,
     };
     this.keys = new Set();
@@ -85,6 +86,7 @@ export class Controls {
       this.pointers.set(event.pointerId, {
         x, y, startX: x, startY: y, side,
         lastMoved: performance.now(),
+        strokeAt: performance.now(),
       });
       try {
         (event.currentTarget || this.canvas).setPointerCapture?.(event.pointerId);
@@ -106,6 +108,10 @@ export class Controls {
       pointer.y = y;
       const delta = y - pointer.startY;
       if (Math.abs(delta) > 0.065) {
+        const now = performance.now();
+        const velocity = Math.abs(delta) / Math.max(0.025, (now - pointer.strokeAt) / 1000);
+        this.input.swipeStrength = clamp((velocity - 0.25) / 2.5, 0, 1);
+        pointer.strokeAt = now;
         this.input.swipeDirection = delta > 0 ? 1 : -1;
         this.input.touchDrive = true;
         this.input.reverse = delta < 0;

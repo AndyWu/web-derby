@@ -31,3 +31,7 @@ Open the HTTPS game directly in Safari on iPhone or iPad. Tap **Enable iOS tilt 
 ### Thumb drive controls
 
 During a race, swipe down in either translucent edge zone to bank a ten-second forward push. Swipe up to brake progressively and ease into slow reverse. Hold both thumbs still in the zones for the handbrake; release either thumb to coast. When the forward push expires the car eases into a slow downhill roll. The dashboard LAMP switch controls the headlight, and the upper-left counter shows live race position out of six. These touch commands also travel through the authoritative family-race input channel.
+
+### Swipe strength and dashboard toggle
+
+Downward swipe velocity controls acceleration and the speed of the ten-second push: a quick flick drives harder than a gentle stroke. Touch the metal toggle on the wooden dashboard plate to turn the headlights on/off; the lever and amber indicator reflect the current state. Keyboard L also toggles this same physical switch.

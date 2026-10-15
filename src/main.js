@@ -24,6 +24,7 @@ import { AI_DRIVERS, aiInput } from "./ai.js";
 import { SnapshotBuffer } from "./replication.js";
 import { createVehicleThumbnails } from "./thumbnails.js";
 import { disposeVehicle } from "./resources.js";
+import { addDashboardSwitch, updateDashboardSwitch } from "./dashboard-switch.js";
 
 document.querySelector("#app").innerHTML = `<canvas class="game"></canvas>
 <section class="screen" id="home"><div class="content"><div class="eyebrow">The countryside is calling · Est. 1978</div><div class="rule"></div><h1>Hollow<br><i>Run.</i></h1><p>Six drivers. Two miles. Nothing but gravity.<br>A homemade soapbox derby down the old farm road.</p><div class="actions"><button class="primary" id="garage-btn">Take the wheel ↗</button><button id="family-btn">Family race</button></div><div class="help">BUILT BY HAND. DRIVEN BY FEEL.</div></div><div class="top-mark">SOAPBOX DERBY / 01</div><div class="footer">3218 METRES OF DIRT &nbsp; / &nbsp; ONE WAY DOWN</div></section>
@@ -33,7 +34,7 @@ document.querySelector("#app").innerHTML = `<canvas class="game"></canvas>
 <div class="swipe-zone swipe-left" data-side="left" aria-label="Left thumb swipe area"><span class="swipe-arrow">↑</span><span>SLOW / REVERSE</span><i></i><strong>SWIPE</strong><span>FORWARD</span><span class="swipe-arrow">↓</span></div>
 <div class="swipe-zone swipe-right" data-side="right" aria-label="Right thumb swipe area"><span class="swipe-arrow">↑</span><span>SLOW / REVERSE</span><i></i><strong>SWIPE</strong><span>FORWARD</span><span class="swipe-arrow">↓</span></div>
 <div class="brake-feedback">HANDBRAKE · RELEASE A THUMB TO ROLL</div>
-<button id="dashboard-light" aria-label="Headlight" aria-pressed="false"><span>☀</span> LAMP <b>OFF</b></button>
+<button id="dashboard-light" aria-label="Toggle physical dashboard headlight switch" aria-pressed="false" title="Headlight switch (L)"></button>
 </div>
 <button class="race-menu hidden" id="pause">Garage ↗</button>
 <section id="lobby" class="modal hidden"><div class="eyebrow">Offline family race · up to six</div><h2>Meet at the starting line.</h2><p>Install once while online. Then connect every device to the same Wi-Fi or a supported Personal Hotspot. No signaling server is used. Hotspot support and local peer connections depend on your devices and network.</p><div class="actions"><button id="host">Host family race</button><button id="scan">Scan connection QR</button><button id="close-lobby">Close</button></div><div class="qr-row"><div class="qr-placeholder" id="qr-placeholder">Your connection QR will appear here.<br>Host a race or scan an invitation.</div><canvas id="qr" class="hidden"></canvas><div><p id="network-status">Host displays an offer. Guest scans it and shows an answer. Host scans the answer. Repeat for each guest.</p><video id="scanner" playsinline muted class="hidden"></video></div></div><textarea id="code" placeholder="Connection code — copy/paste fallback" aria-label="Connection code"></textarea><div class="actions"><button id="accept">Use connection code</button><button id="copy">Copy code</button><button id="family-pass">Create demo family pass</button><button id="race-room">Start family race</button></div><p id="offline-status" class="help">Offline cache is preparing. Keep this page open while online.</p><p id="pass-status" class="help">Family pass is a signed six-seat local demo. It does not verify a purchase.</p></section>
@@ -138,6 +139,7 @@ function choose(i) {
   selected = i;
   if (car) disposeVehicle(car);
   car = createVehicle(THREE, i, true);
+  addDashboardSwitch(THREE, car);
   scene.add(car);
   const display = roadAt(18);
   car.position.set(display.x - 1, display.y + 0.42, display.z);
@@ -317,7 +319,7 @@ const guide = document.createElement("section");
 guide.id = "drive-guide";
 guide.className = "modal hidden";
 guide.innerHTML =
-  '<div class="eyebrow">Before the starting bell</div><h2>Both hands on the wheel.</h2><p>Hold your device in landscape, centered and comfortable. Enable tilt, then turn it like a steering wheel. Swipe DOWN in either translucent edge zone for a 10-second forward push. Swipe UP to slow down, then gently reverse. Rest both thumbs still in the zones to hold the handbrake; release a thumb to roll. After a push runs out, the car settles into a slow downhill coast. Use the dashboard LAMP switch for the headlight.</p><div class="actions"><button id="guide-tilt">Enable tilt while centered</button><button class="primary" id="hands-ready">Hands ready — roll out</button></div>';
+  '<div class="eyebrow">Before the starting bell</div><h2>Both hands on the wheel.</h2><p>Hold your device in landscape, centered and comfortable. Enable tilt, then turn it like a steering wheel. Swipe DOWN in either translucent edge zone for a 10-second forward push. A faster swipe accelerates harder and reaches a higher speed. Swipe UP to slow down, then gently reverse. Rest both thumbs still in the zones to hold the handbrake; release a thumb to roll. After a push runs out, the car settles into a slow downhill coast. Use the dashboard LAMP switch for the headlight.</p><div class="actions"><button id="guide-tilt">Enable tilt while centered</button><button class="primary" id="hands-ready">Hands ready — roll out</button></div>';
 document.body.append(guide);
 const tiltPanel = () =>
   `<div class="tilt-feedback hidden"><svg class="tilt-dial" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26"/><circle cx="32" cy="32" r="6"/><path d="M8 22 27 30M56 22 37 30M32 38v20"/></svg><div><strong class="tilt-feedback-title" role="status" aria-live="polite"></strong><p class="tilt-feedback-copy"></p><button class="tilt-recenter hidden" type="button">Recenter wheel</button><a class="tilt-safari-link hidden" href="https://hollow-run-soapbox-derby.andycswu.chatgpt.site/" target="_blank" rel="noopener">Game link to open in Safari ↗</a></div></div>`;
@@ -451,6 +453,7 @@ net.onInput = (arr, id) => {
       reverse: !!arr[5],
       swipeDirection: arr[6] || 0,
       touchDrive: !!arr[7],
+      swipeStrength: arr[8] ?? 0.5,
     });
   }
 };
@@ -651,7 +654,7 @@ function animate(now) {
   $("#race-controls").classList.toggle("hidden", !raceUI);
   $("#race-controls").classList.toggle("braking", input.brake);
   $("#dashboard-light").setAttribute("aria-pressed", String(input.headlight));
-  $("#dashboard-light b").textContent = input.headlight ? "ON" : "OFF";
+
   for (const zone of document.querySelectorAll(".swipe-zone")) {
     zone.classList.toggle("touching", [...controls.pointers.values()].some(p => p.side === (zone.dataset.side === "left" ? "leftPaddle" : "rightPaddle")));
   }
@@ -730,6 +733,7 @@ function animate(now) {
       new THREE.Vector3(input.steer * 0.3, 1.45, -25),
     );
     camera.lookAt(target);
+    updateDashboardSwitch(THREE, car, camera, $("#dashboard-light"), input.headlight, innerWidth, innerHeight);
     const strokes = [input.leftPaddle, input.rightPaddle];
     strokes.forEach((on, i) => {
       if (on && !lastStroke[i]) audio.stroke?.(i ? 1 : -1);
@@ -786,6 +790,7 @@ function animate(now) {
           +input.reverse,
           input.swipeDirection,
           +input.touchDrive,
+          input.swipeStrength,
         ]);
       else if (net.role === "host")
         net.broadcast([

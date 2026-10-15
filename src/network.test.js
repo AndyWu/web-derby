@@ -19,3 +19,14 @@ test('family channel carries signed swipe direction and touch drive state', () =
   channel.onmessage({data:new Float32Array([0,0,0,0,1,0]).buffer});
   assert.equal(received.length,4);
 });
+
+
+test('family channel validates and preserves swipe strength', () => {
+  const host=new FamilyNetwork();host.role='host';
+  const received=[];host.onInput=data=>received.push(data);
+  const channel={};host._channel({id:'test',pc:{}},channel);
+  for(const strength of [0,0.5,1])channel.onmessage({data:new Float32Array([0,0,0,0,0,0,1,1,strength]).buffer});
+  assert.deepEqual(received.map(data=>data[8]),[0,0.5,1]);
+  for(const strength of [-0.1,1.1])channel.onmessage({data:new Float32Array([0,0,0,0,0,0,1,1,strength]).buffer});
+  assert.equal(received.length,3);
+});

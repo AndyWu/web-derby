@@ -67,6 +67,7 @@ export function createRacer(stats = {}, index = 0) {
     _paddleCooldown: 0,
     _swipeHeld: 0,
     _boostTime: 0,
+    _boostStrength: 0.5,
     _driveDirection: 0,
     _suspension: null,
     _sideX: 1,
@@ -167,10 +168,14 @@ function integrate(racer, input, dt, roadAt, surfaceAt) {
   );
 
   const swipe = Math.sign(finite(input.swipeDirection, 0));
+  const strength = clamp(finite(input.swipeStrength, 0.5), 0, 1);
   if (swipe && swipe !== racer._swipeHeld) {
+    racer._boostStrength = strength;
     racer._driveDirection = swipe;
     racer._boostTime = 10;
   }
+  if (swipe > 0 && racer._driveDirection > 0)
+    racer._boostStrength = Math.max(racer._boostStrength, strength);
   racer._swipeHeld = swipe;
   racer._boostTime = Math.max(0, racer._boostTime - dt);
   if (input.brake) {
@@ -211,10 +216,10 @@ function integrate(racer, input, dt, roadAt, surfaceAt) {
   // Touch strokes bank ten seconds of assistance; terrain still adds drag.
   // Once spent, ease back toward a slow downhill coast rather than stopping.
   const target = racer._boostTime > 0
-    ? (racer._driveDirection > 0 ? Math.min(15, topSpeed) : -1.6)
+    ? (racer._driveDirection > 0 ? Math.min(10 + racer._boostStrength * 12, topSpeed) : -1.6)
     : 3;
   const assist = input.touchDrive && !input.brake
-    ? clamp((target - racer.speed) * (racer._boostTime > 0 ? 1.8 : 0.28), -4.5, 5.5)
+    ? clamp((target - racer.speed) * (racer._boostTime > 0 ? 1.8 : 0.28), -4.5, 3 + racer._boostStrength * 7)
     : 0;
   const acceleration = assist +
     9.81 * grade * gravityScale -

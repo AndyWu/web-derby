@@ -342,3 +342,20 @@ test("typing in form fields or editable content does not trigger game keys", () 
   assert.equal(controls.update().brake, false);
   controls.dispose();
 });
+
+
+test("faster downward swipes produce stronger drive commands", () => {
+  const controls = new Controls(fakeCanvas());
+  const swipe=(id, duration)=>{
+    controls._onPointerDown({pointerId:id,clientX:90,clientY:150});
+    controls.pointers.get(id).strokeAt=performance.now()-duration;
+    controls._onPointerMove({pointerId:id,clientX:90,clientY:230});
+    const strength=controls.input.swipeStrength;
+    controls._onPointerUp({pointerId:id});
+    return strength;
+  };
+  const slow=swipe(1,700),fast=swipe(2,60);
+  assert.ok(fast>slow+0.7);
+  assert.ok(fast<=1 && slow>=0);
+  controls.dispose();
+});
