@@ -412,3 +412,7 @@ button:disabled {
 
 .family-top { position: sticky; top: 0; z-index: 5; background: #192b23; padding: 10px 0; }
 #race-countdown { position: fixed; top: 14%; left: 50%; transform: translateX(-50%); z-index: 15; color: #fff5d9; background: #192b23bb; border-radius: 12px; padding: 14px 28px; font: bold 32px Georgia, serif; pointer-events: none; }
+
+.stage-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; color: #f0e3c8; }
+.stage-picker select { padding: 10px; background: #253b30; color: #fff3d8; border: 1px solid #788470; border-radius: 6px; font: inherit; }
+.stage-picker span { font-size: 12px; opacity: .7; }

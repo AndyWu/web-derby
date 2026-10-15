@@ -26,6 +26,7 @@ try {
    await page.evaluate(()=>{const e=new Event('deviceorientation');e.beta=60;e.gamma=0;window.dispatchEvent(e);});
    await page.waitForFunction(()=>document.querySelector('#lobby-tilt').textContent.includes('enabled'));
  }
+ await host.locator('#lobby .stage-select').selectOption('3');
  await host.locator('#host').click();
  await host.waitForFunction(()=>document.querySelector('#code').value.startsWith('DERBY1:'));
  assert.equal(await host.locator('#race-room').isDisabled(),true);
@@ -41,6 +42,7 @@ try {
  await host.locator('#race-room').click();
  await guest.waitForFunction(()=>document.querySelector('#lobby').classList.contains('hidden'));
  assert.equal(await guest.evaluate(()=>window.__derby.racers.length),10);
+ assert.equal(await guest.evaluate(()=>window.__derby.stageIndex),3);
  await host.waitForFunction(()=>window.__derby.startDelay>8);
  const before=await host.evaluate(()=>window.__derby.racers.map(r=>r.s));
  await host.waitForTimeout(1500);

@@ -21,6 +21,7 @@ import {
 } from "./network.js";
 import { DerbyAudio } from "./audio.js";
 import { setupGraphics } from "./graphics.js";
+import { createWeather } from "./weather.js";
 import { AI_DRIVERS, aiInput } from "./ai.js";
 import { SnapshotBuffer } from "./replication.js";
 import { createVehicleThumbnails } from "./thumbnails.js";
@@ -103,6 +104,9 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 const scene = new THREE.Scene();
 createEnvironment(THREE, scene);
 const graphics = setupGraphics(THREE, renderer, scene);
+const weather = createWeather(THREE, scene, renderer);
+const STAGES = ["Countryside", "Snow", "Night", "Heavy rain"];
+let stageIndex = 0, advanceStage = false;
 const camera = new THREE.PerspectiveCamera(
   68,
   innerWidth / innerHeight,
@@ -165,7 +169,11 @@ function choose(i) {
 }
 choose(0);
 function garage() {
-  if (net.role === "host" && raceEpoch) net.broadcastRace?.(raceEpoch, 0);
+  if (advanceStage && net.role !== "guest") {
+    setStage((stageIndex + 1) % STAGES.length);
+    advanceStage = false;
+  }
+  if (net.role === "host" && raceEpoch) net.broadcastRace?.(raceEpoch, 0, 0, stageIndex);
   running = false;
   controls.resetDrive();
   audio.suspendRace?.();
@@ -192,6 +200,8 @@ function start(skipGuide = false) {
     return;
   }
   raceCompleted = false;
+  advanceStage = false;
+  if (stageIndex === 2) controls.input.headlight = true;
   controls.resetDrive();
   snapshotBuffer.clear();
   snapshotTargets = null;
@@ -223,7 +233,7 @@ function start(skipGuide = false) {
   running = true;
   if (net.role === "host") {
     raceEpoch = Math.max(Date.now(), raceEpoch + 1);
-    net.broadcastRace?.(raceEpoch, 1, 10000);
+    net.broadcastRace?.(raceEpoch, 1, 10000, stageIndex);
   }
   $("#home").classList.add("hidden");
   $("#garage").classList.add("hidden");
@@ -318,6 +328,21 @@ $("#lobby-garage").onclick = () => {
   familyGarage = true;
 
 };
+function setStage(index) {
+  stageIndex = index;
+  weather.setStage(index);
+  document.querySelectorAll(".stage-select").forEach(select => {
+    select.value = String(index);
+    select.disabled = net.role === "guest";
+  });
+}
+for (const container of [$("#garage .garage"), $("#lobby")]) {
+  const label = document.createElement("label");
+  label.className = "stage-picker";
+  label.innerHTML = `Race scenery <select class="stage-select" aria-label="Race scenery">${STAGES.map((name,i)=>`<option value="${i}">${i+1}. ${name}</option>`).join("")}</select><span>Next race: countryside → snow → night → heavy rain</span>`;
+  container.prepend(label);
+  label.querySelector("select").onchange = event => { if (net.role !== "guest") { advanceStage = false; setStage(Number(event.target.value)); } };
+}
 const garageActions = $("#garage .actions");
 $("#garage .garage").prepend(garageActions);
 $("#family-btn").onclick = () => {
@@ -361,6 +386,7 @@ $("#hands-ready").onclick = () => {
   start(true);
 };
 function refreshFamilyLobby() {
+  document.querySelectorAll(".stage-select").forEach(select => select.disabled = net.role === "guest");
   const connected = net.connectedCount;
   const host = net.role === "host";
   $("#family-connections").textContent = connected
@@ -457,7 +483,8 @@ net.onRoster = (indices) => {
     });
   }
 };
-net.onRace = (epoch, active, remainingMs = 0) => {
+net.onRace = (epoch, active, remainingMs = 0, stage = 0) => {
+  setStage(stage);
   const changed = epoch !== raceEpoch;
   raceEpoch = epoch;
   hostRaceActive = active;
@@ -857,6 +884,7 @@ function animate(now) {
     }
     if (r.finished && !raceCompleted) {
       raceCompleted = true;
+      advanceStage = true;
       if (net.role !== "host") running = false;
       showModal($("#finish"));
       renderResults();
@@ -870,6 +898,7 @@ function animate(now) {
     camera.lookAt(1, 0.3, -24);
     graphics.update(clockTime, 0, car);
   }
+  weather.update(clockTime, camera.position);
   if (renderEnabled) renderer.render(scene, camera);
 }
 requestAnimationFrame(animate);
@@ -897,6 +926,8 @@ window.__derby = {
   get vehicles() {
     return [...remoteVehicles];
   },
+  get stageIndex() { return stageIndex; },
+  setStage,
   get startDelay() { return startDelay; },
   get running() {
     return running;

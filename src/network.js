@@ -160,14 +160,15 @@ export class FamilyNetwork {
           else if (
             this.role === "guest" &&
             Array.isArray(data) &&
-            (data.length === 3 || data.length === 4) &&
+            (data.length >= 3 && data.length <= 5) &&
+            (data.length < 5 || (Number.isInteger(data[4]) && data[4] >= 0 && data[4] <= 3)) &&
             (data.length === 3 || (Number.isFinite(data[3]) && data[3] >= 0 && data[3] <= 10000)) &&
             data[0] === 82 &&
             Number.isSafeInteger(data[1]) &&
             data[1] > 0 &&
             (data[2] === 0 || data[2] === 1)
           )
-            this.onRace(data[1], data[2], data[3] ?? 0);
+            this.onRace(data[1], data[2], data[3] ?? 0, data[4] ?? 0);
           else if (
             this.role === "guest" &&
             Array.isArray(data) &&
@@ -336,9 +337,9 @@ export class FamilyNetwork {
       peer.channel.send(JSON.stringify(message));
   }
   currentRaceState() {
-    return [...this.raceState, Math.max(0, (this.raceDeadline ?? 0) - performance.now())];
+    return [...this.raceState, Math.max(0, (this.raceDeadline ?? 0) - performance.now()), this.raceStage ?? 0];
   }
-  broadcastRace(epoch, active, countdownMs = 0) {
+  broadcastRace(epoch, active, countdownMs = 0, stage = 0) {
     if (
       !Number.isSafeInteger(epoch) ||
       epoch <= 0 ||
@@ -349,6 +350,7 @@ export class FamilyNetwork {
       );
     if (this.role !== "host") return;
     this.raceState = [82, epoch, active];
+    this.raceStage = Number.isInteger(stage) && stage >= 0 && stage <= 3 ? stage : 0;
     this.raceDeadline = performance.now() + Math.max(0, Math.min(10000, countdownMs));
     clearInterval(this.raceTimer);
     const send = () => {

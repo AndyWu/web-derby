@@ -29,10 +29,20 @@ export function hazardAt(s) {
   return null;
 }
 
+// Three overlapping sweeps put visible S turns across the full descent. Keep
+// this derivative in one place so mesh edges and heading follow the same curve.
+function roadX(s) {
+  return Math.sin(s * 0.004) * 35 + Math.sin(s * 0.011) * 8 + Math.sin(s * 0.0165) * 14;
+}
+
+function roadDx(s) {
+  return Math.cos(s * 0.004) * 0.14 + Math.cos(s * 0.011) * 0.088 + Math.cos(s * 0.0165) * 0.231;
+}
+
 export function roadAt(s) {
   const d = Math.max(0, Math.min(COURSE_LENGTH, s));
-  const x = Math.sin(d * 0.004) * 35 + Math.sin(d * 0.011) * 8;
-  const dx = Math.cos(d * 0.004) * 0.14 + Math.cos(d * 0.011) * 0.088;
+  const x = roadX(d);
+  const dx = roadDx(d);
   return {
     x,
     y: -d * SLOPE,
@@ -188,7 +198,7 @@ export function createEnvironment(THREE, scene) {
     for (let i = 0; i <= count; i++) {
       const s = Math.min(COURSE_LENGTH, i * step),
         p = roadAt(s);
-      const tangentX = Math.cos(s * 0.004) * 0.14 + Math.cos(s * 0.011) * 0.088;
+      const tangentX = roadDx(s);
       const norm = Math.hypot(1, tangentX),
         nx = 1 / norm,
         nz = tangentX / norm;
@@ -260,7 +270,7 @@ export function createEnvironment(THREE, scene) {
         s = Math.min(end, s + 1.5), i++
       ) {
         const p = roadAt(s),
-          dx = Math.cos(s * 0.004) * 0.14 + Math.cos(s * 0.011) * 0.088;
+          dx = roadDx(s);
         const n = Math.hypot(1, dx);
         const patch = hazardAt(s);
         if (!patch) break;
@@ -468,7 +478,7 @@ export function createEnvironment(THREE, scene) {
       p.z + Math.sin(p.heading) * off,
     );
     group.rotation.y =
-      -Math.atan(Math.cos(s * 0.004) * 0.14 + Math.cos(s * 0.011) * 0.088) +
+      -Math.atan(roadDx(s)) +
       (side * Math.PI) / 2;
     const body = new THREE.Mesh(new THREE.BoxGeometry(11, 6, 16), wallMat);
     body.position.y = 3;
@@ -545,9 +555,7 @@ export function createEnvironment(THREE, scene) {
     const p = roadAt(s),
       group = new THREE.Group();
     group.position.set(p.x, p.y, p.z);
-    group.rotation.y = -Math.atan(
-      Math.cos(s * 0.004) * 0.14 + Math.cos(s * 0.011) * 0.088,
-    );
+    group.rotation.y = -Math.atan(roadDx(s));
     for (const side of [-1, 1]) {
       const post = new THREE.Mesh(
         new THREE.BoxGeometry(0.42, 6.4, 0.45),
@@ -589,7 +597,7 @@ export function createEnvironment(THREE, scene) {
     for (let col = 0; col < 16; col++) {
       const s = 3208 + row * 0.55,
         p = roadAt(s);
-      const dx = Math.cos(s * 0.004) * 0.14 + Math.cos(s * 0.011) * 0.088,
+      const dx = roadDx(s),
         n = Math.hypot(1, dx);
       const lateral = (col - 7.5) * 0.56;
       const square = new THREE.Mesh(
@@ -617,9 +625,7 @@ export function createEnvironment(THREE, scene) {
       p.y,
       p.z + Math.sin(p.heading) * -7.3,
     );
-    group.rotation.y = -Math.atan(
-      Math.cos(s * 0.004) * 0.14 + Math.cos(s * 0.011) * 0.088,
-    );
+    group.rotation.y = -Math.atan(roadDx(s));
     const stake = new THREE.Mesh(
       new THREE.BoxGeometry(0.18, 2.4, 0.18),
       landmarkWood,
