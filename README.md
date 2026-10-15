@@ -8,7 +8,7 @@ A Three.js offline-first soapbox racing prototype, with a 3,218 metre procedural
 
 ## Controls
 
-Landscape only on mobile. Enable tilt in the garage from a user gesture. A/D or arrows steer; alternate W/S to paddle; Space brakes; L toggles the lamp; R toggles forward/reverse gear. Touch: alternate upward swipes on the two sides; bottom-left holds the brake; bottom-right tap toggles the lamp and holding toggles forward/reverse gear. Physical steering, pedals and levers animate with input. The hood flag communicates speed; there is no speed HUD.
+Landscape only on mobile. Enable tilt in the garage from a user gesture. A/D or arrows steer; alternate W/S to paddle; Space brakes; L toggles the lamp; R toggles forward/reverse gear. Touch: swipe down in either edge zone to go, up to slow/reverse, and rest both thumbs to brake. Use the dashboard lamp switch. Physical steering, pedals and levers animate with input. The hood flag communicates speed; there is no speed HUD.
 
 ## Multiplayer
 
@@ -27,3 +27,7 @@ Browser evidence also covers a real six-peer WebRTC star on one machine, QR pixe
 ### iOS tilt steering
 
 Open the HTTPS game directly in Safari on iPhone or iPad. Tap **Enable iOS tilt steering**, allow motion access, then hold the device upright in landscape until tilt steering is ready. Turn it like a steering wheel; use **Recenter** at a comfortable neutral position. Both landscape directions and accelerometer fallback are supported. Embedded browsers may block motion access. Automated Chromium and WebKit checks use simulated sensors; physical iOS validation remains necessary.
+
+### Thumb drive controls
+
+During a race, swipe down in either translucent edge zone to bank a ten-second forward push. Swipe up to brake progressively and ease into slow reverse. Hold both thumbs still in the zones for the handbrake; release either thumb to coast. When the forward push expires the car eases into a slow downhill roll. The dashboard LAMP switch controls the headlight, and the upper-left counter shows live race position out of six. These touch commands also travel through the authoritative family-race input channel.

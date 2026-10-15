@@ -56,9 +56,10 @@ const finiteMessage = (data) =>
   );
 const validInput = (data) =>
   finiteMessage(data) &&
-  data.length === 6 &&
+  (data.length === 6 || data.length === 8) &&
   Math.abs(data[0]) <= 1 &&
-  data.slice(1).every((n) => n === 0 || n === 1);
+  data.slice(1, 6).every((n) => n === 0 || n === 1) &&
+  (data.length === 6 || ([-1, 0, 1].includes(data[6]) && [0, 1].includes(data[7])));
 const validSnapshot = (data) =>
   finiteMessage(data) &&
   ((data[0] === 77 &&

@@ -140,3 +140,34 @@ test("reverse gear only reverses paddle force, never supplies uphill motor force
   stepRacer(paddling, { reverse: true, leftPaddle: true }, 1 / 60, roadAt);
   assert.ok(paddling.speed < 0);
 });
+
+
+test("one touch stroke banks ten seconds then eases to a downhill coast", () => {
+  const racer = createRacer({}, 0);
+  racer.s = 100;
+  const road = s => ({ x:0, y:-s*0.06, z:-s, width:8 });
+  const surface = () => ({ drag:0.13, grip:1 });
+  stepRacer(racer, { touchDrive:true, swipeDirection:1 }, 1/60, road, surface);
+  for (let i=0;i<9*60;i++) stepRacer(racer, { touchDrive:true }, 1/60, road, surface);
+  assert.ok(racer.speed > 12, `sustained speed ${racer.speed}`);
+  assert.ok(racer._boostTime > 0.8 && racer._boostTime < 1.1);
+  for (let i=0;i<25*60;i++) stepRacer(racer, { touchDrive:true }, 1/60, road, surface);
+  assert.ok(racer.speed > 1 && racer.speed < 5, `coast speed ${racer.speed}`);
+});
+
+test("upward touch slows before reversing slowly; handbrake holds and cancels boost", () => {
+  const racer = createRacer({}, 0);
+  racer.s = 200;
+  racer.speed = 14;
+  const road = s => ({ x:0, y:-s*0.06, z:-s, width:8 });
+  const surface = () => ({ drag:0.13, grip:1 });
+  stepRacer(racer, { touchDrive:true, swipeDirection:-1 }, 1/60, road, surface);
+  assert.ok(racer.speed > 0 && racer.speed < 14);
+  for (let i=0;i<7*60;i++) stepRacer(racer, { touchDrive:true }, 1/60, road, surface);
+  assert.ok(racer.speed < -0.5 && racer.speed > -2, `reverse speed ${racer.speed}`);
+  for (let i=0;i<2*60;i++) stepRacer(racer, { touchDrive:true, brake:true }, 1/60, road, surface);
+  assert.equal(racer.speed, 0);
+  assert.equal(racer._boostTime, 0);
+  for (let i=0;i<4*60;i++) stepRacer(racer, { touchDrive:true }, 1/60, road, surface);
+  assert.ok(racer.speed > 0 && racer.speed < 5);
+});

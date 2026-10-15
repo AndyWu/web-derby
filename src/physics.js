@@ -65,6 +65,9 @@ export function createRacer(stats = {}, index = 0) {
     _leftHeld: false,
     _rightHeld: false,
     _paddleCooldown: 0,
+    _swipeHeld: 0,
+    _boostTime: 0,
+    _driveDirection: 0,
     _suspension: null,
     _sideX: 1,
     _sideZ: 0,
@@ -163,12 +166,24 @@ function integrate(racer, input, dt, roadAt, surfaceAt) {
     2,
   );
 
+  const swipe = Math.sign(finite(input.swipeDirection, 0));
+  if (swipe && swipe !== racer._swipeHeld) {
+    racer._driveDirection = swipe;
+    racer._boostTime = 10;
+  }
+  racer._swipeHeld = swipe;
+  racer._boostTime = Math.max(0, racer._boostTime - dt);
+  if (input.brake) {
+    racer._boostTime = 0;
+    racer._driveDirection = 0;
+  }
   racer._paddleCooldown = Math.max(0, racer._paddleCooldown - dt);
   const left = !!input.leftPaddle;
   const right = !!input.rightPaddle;
   // An alternating stroke rewards rhythm; holding a key cannot generate impulses.
   if (
     racer._paddleCooldown === 0 &&
+    !input.touchDrive &&
     ((left && !racer._leftHeld) || (right && !racer._rightHeld))
   ) {
     const impulse =
@@ -193,12 +208,23 @@ function integrate(racer, input, dt, roadAt, surfaceAt) {
     racer.speed *
     Math.abs(racer.speed);
   const brake = input.brake ? 11 : 0;
-  const acceleration =
+  // Touch strokes bank ten seconds of assistance; terrain still adds drag.
+  // Once spent, ease back toward a slow downhill coast rather than stopping.
+  const target = racer._boostTime > 0
+    ? (racer._driveDirection > 0 ? Math.min(15, topSpeed) : -1.6)
+    : 3;
+  const assist = input.touchDrive && !input.brake
+    ? clamp((target - racer.speed) * (racer._boostTime > 0 ? 1.8 : 0.28), -4.5, 5.5)
+    : 0;
+  const acceleration = assist +
     9.81 * grade * gravityScale -
     Math.sign(racer.speed) * rolling -
     aero -
     (input.brake ? Math.sign(racer.speed) * brake : 0);
+  const beforeSpeed = racer.speed;
   racer.speed = clamp(racer.speed + acceleration * dt, -5, topSpeed);
+  if (input.brake && (Math.sign(beforeSpeed) !== Math.sign(racer.speed) || Math.abs(beforeSpeed) < 0.15))
+    racer.speed = 0;
   if (Math.abs(racer.speed) < 0.03 && (input.brake || Math.abs(grade) < 0.02))
     racer.speed = 0;
 

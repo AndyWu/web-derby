@@ -32,6 +32,8 @@ export class Controls {
       brake: false,
       reverse: false,
       headlight: false,
+      swipeDirection: 0,
+      touchDrive: false,
     };
     this.keys = new Set();
     this.buttons = new Map();
@@ -48,6 +50,7 @@ export class Controls {
     this._sensorSource = null;
     this._headlightLatch = false;
     this._reverseLatch = false;
+    this._swipePulse = 0;
     this._touchPulse = { leftPaddle: 0, rightPaddle: 0 };
     this._onKeyDown = (event) => {
       const target = event.target;
@@ -78,39 +81,41 @@ export class Controls {
       const x = (event.clientX - bounds.left) / Math.max(1, bounds.width);
       const y = (event.clientY - bounds.top) / Math.max(1, bounds.height);
       const side = x < 0.5 ? "leftPaddle" : "rightPaddle";
-      const zone = y > 0.81 ? (x < 0.5 ? "brake" : "gear") : "drive";
+      if (x > 0.23 && x < 0.77) return;
       this.pointers.set(event.pointerId, {
-        x,
-        y,
-        startX: x,
-        startY: y,
-        side,
-        zone,
-        started: performance.now(),
+        x, y, startX: x, startY: y, side,
+        lastMoved: performance.now(),
       });
-      this.canvas.setPointerCapture?.(event.pointerId);
+      try {
+        (event.currentTarget || this.canvas).setPointerCapture?.(event.pointerId);
+      } catch (error) {
+        // A browser may retire a cancelled pointer before this handler runs.
+        if (error.name !== "NotFoundError") throw error;
+      }
+      event.preventDefault?.();
     };
     this._onPointerMove = (event) => {
       const pointer = this.pointers.get(event.pointerId);
       if (!pointer || !this.canvas) return;
       const bounds = this.canvas.getBoundingClientRect();
-      pointer.x = (event.clientX - bounds.left) / Math.max(1, bounds.width);
-      pointer.y = (event.clientY - bounds.top) / Math.max(1, bounds.height);
-      if (pointer.zone === "drive" && pointer.startY - pointer.y > 0.075) {
+      const x = (event.clientX - bounds.left) / Math.max(1, bounds.width);
+      const y = (event.clientY - bounds.top) / Math.max(1, bounds.height);
+      if (Math.hypot(x-pointer.x, y-pointer.y) > 0.004)
+        pointer.lastMoved = performance.now();
+      pointer.x = x;
+      pointer.y = y;
+      const delta = y - pointer.startY;
+      if (Math.abs(delta) > 0.065) {
+        this.input.swipeDirection = delta > 0 ? 1 : -1;
+        this.input.touchDrive = true;
+        this.input.reverse = delta < 0;
+        this._swipePulse = 0.16;
         this._touchPulse[pointer.side] = 0.09;
-        pointer.startY = pointer.y;
+        pointer.startY = y;
       }
+      event.preventDefault?.();
     };
     this._onPointerUp = (event) => {
-      const pointer = this.pointers.get(event.pointerId);
-      if (!pointer) return;
-      if (pointer.zone === "gear") {
-        if (performance.now() - pointer.started >= 450) {
-          if (!pointer.gearToggled) this.input.reverse = !this.input.reverse;
-        } else {
-          this.input.headlight = !this.input.headlight;
-        }
-      }
       this.pointers.delete(event.pointerId);
     };
     this._onOrientation = (event) => {
@@ -316,10 +321,6 @@ export class Controls {
       Number(has("ArrowRight") || has("KeyD") || button("right")) -
       Number(has("ArrowLeft") || has("KeyA") || button("left"));
     if (this.gyroEnabled && !steer) steer = this.gyro;
-    for (const pointer of this.pointers.values()) {
-      if (pointer.zone === "drive")
-        steer += clamp((pointer.x - pointer.startX) * 3, -1, 1);
-    }
     this.input.steer = clamp(steer, -1, 1);
     this.input.leftPaddle =
       has("ArrowUp") ||
@@ -331,19 +332,11 @@ export class Controls {
       has("KeyS") ||
       button("rightPaddle") ||
       this._touchPulse.rightPaddle > 0;
-    const pointerBrake = [...this.pointers.values()].some(
-      (pointer) => pointer.zone === "brake",
+    const paused = [...this.pointers.values()].filter(
+      pointer => performance.now() - pointer.lastMoved >= 280,
     );
-    for (const pointer of this.pointers.values()) {
-      if (
-        pointer.zone === "gear" &&
-        !pointer.gearToggled &&
-        performance.now() - pointer.started >= 450
-      ) {
-        this.input.reverse = !this.input.reverse;
-        pointer.gearToggled = true;
-      }
-    }
+    const pointerBrake = paused.some(p => p.side === "leftPaddle") &&
+      paused.some(p => p.side === "rightPaddle");
     this.input.brake = has("Space") || button("brake") || pointerBrake;
     const reverseKey = has("KeyR") || button("reverse");
     if (reverseKey && !this._reverseLatch)
@@ -354,6 +347,8 @@ export class Controls {
       this.input.headlight = !this.input.headlight;
     this._headlightLatch = lightKey;
     const elapsed = Number.isFinite(dt) && dt > 0 ? dt : 1 / 60;
+    this._swipePulse = Math.max(0, this._swipePulse - elapsed);
+    if (this._swipePulse === 0) this.input.swipeDirection = 0;
     this._touchPulse.leftPaddle = Math.max(
       0,
       this._touchPulse.leftPaddle - elapsed,
@@ -363,6 +358,16 @@ export class Controls {
       this._touchPulse.rightPaddle - elapsed,
     );
     return this.input;
+  }
+
+  resetDrive() {
+    this.pointers.clear();
+    this._swipePulse = 0;
+    this._touchPulse = { leftPaddle: 0, rightPaddle: 0 };
+    this.input.swipeDirection = 0;
+    this.input.touchDrive = false;
+    this.input.reverse = false;
+    this.input.brake = false;
   }
 
   dispose() {

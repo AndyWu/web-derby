@@ -391,3 +391,23 @@ button:disabled {
     height: 38px;
   }
 }
+
+#race-controls { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+#race-rank { position:absolute; top: max(18px, env(safe-area-inset-top)); left: max(22px, env(safe-area-inset-left)); padding: 8px 15px; border: 1px solid #f3ead433; border-radius: 10px; background: #19231d66; color: #fff5de; font: 600 32px Georgia, serif; backdrop-filter: blur(6px); }
+#race-rank span { font-size:20px; opacity:.7; }
+.swipe-zone { position:absolute; top:32%; bottom:15%; width: min(17vw, 145px); min-height:140px; border:1px solid #fff3d74d; border-radius:28px; background:linear-gradient(180deg,#e8e0bd15,#18251c55); color:#fff5ddbb; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:7px; pointer-events:auto; user-select:none; -webkit-user-select:none; touch-action:none; backdrop-filter:blur(2px); font-size:9px; letter-spacing:1px; }
+.swipe-left { left:max(14px, env(safe-area-inset-left)); }
+.swipe-right { right:max(14px, env(safe-area-inset-right)); }
+.swipe-zone strong { font-size:12px; letter-spacing:3px; }
+.swipe-zone i { height:18px; width:1px; background:#fff3d766; }
+.swipe-arrow { font-size:25px; line-height:1; }
+.swipe-zone.touching { background:#e8d6a340; border-color:#fff0c9bb; }
+.braking .swipe-zone { background:#bc76395c; border-color:#f9c88cbb; }
+.brake-feedback { position:absolute; bottom:27%; width:100%; text-align:center; color:#ffe2ab; font-size:10px; letter-spacing:2px; opacity:0; }
+.braking .brake-feedback { opacity:1; }
+#dashboard-light { position:absolute; bottom:max(16px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); pointer-events:auto; display:flex; align-items:center; gap:9px; background:#282c26cc; border:1px solid #c3b58c77; border-radius:8px; padding:11px 16px; color:#e7dcbc; font-size:10px; letter-spacing:2px; box-shadow:0 3px 12px #0005; }
+#dashboard-light span { font-size:20px; }
+#dashboard-light b { font-size:9px; color:#b6b8a2; }
+#dashboard-light[aria-pressed="true"] { background:#5b532fd9; border-color:#ffe2a2; }
+#dashboard-light[aria-pressed="true"] b { color:#ffe6a3; }
+@media(max-height:450px) { .swipe-zone { top:28%; bottom:17%; gap:4px; border-radius:22px; } .swipe-zone i { height:9px; } #dashboard-light { padding:7px 13px; } #race-rank { font-size:26px; padding:6px 12px; } }

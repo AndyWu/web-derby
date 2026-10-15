@@ -284,18 +284,30 @@ test("R toggles a persistent reverse gear once per press", () => {
   controls.dispose();
 });
 
-test("lower right tap toggles light; long hold toggles gear once", () => {
+test("edge swipes map down to forward, up to reverse, and two paused thumbs brake", () => {
   const controls = new Controls(fakeCanvas());
-  controls._onPointerDown({ pointerId: 1, clientX: 900, clientY: 450 });
-  controls._onPointerUp({ pointerId: 1 });
-  assert.equal(controls.input.headlight, true);
+  controls._onPointerDown({ pointerId: 1, clientX: 90, clientY: 150 });
+  controls._onPointerMove({ pointerId: 1, clientX: 90, clientY: 220 });
+  assert.equal(controls.update().swipeDirection, 1);
+  assert.equal(controls.input.touchDrive, true);
   assert.equal(controls.input.reverse, false);
-  controls._onPointerDown({ pointerId: 2, clientX: 900, clientY: 450 });
-  controls.pointers.get(2).started -= 500;
-  assert.equal(controls.update().reverse, true);
-  assert.equal(controls.update().reverse, true);
-  controls._onPointerUp({ pointerId: 2 });
+  controls._onPointerUp({ pointerId: 1 });
+  controls.update(0.2);
+  controls._onPointerDown({ pointerId: 2, clientX: 900, clientY: 300 });
+  controls._onPointerMove({ pointerId: 2, clientX: 900, clientY: 220 });
+  assert.equal(controls.update().swipeDirection, -1);
   assert.equal(controls.input.reverse, true);
+  assert.equal(controls.input.headlight, false);
+  controls._onPointerDown({ pointerId: 3, clientX: 90, clientY: 250 });
+  for (const p of controls.pointers.values()) p.lastMoved -= 300;
+  assert.equal(controls.update().brake, true);
+  controls._onPointerUp({ pointerId: 3 });
+  assert.equal(controls.update().brake, false);
+  controls._onPointerDown({ pointerId: 4, clientX: 500, clientY: 250 });
+  assert.equal(controls.pointers.has(4), false);
+  controls.resetDrive();
+  assert.equal(controls.input.touchDrive, false);
+  assert.equal(controls.pointers.size, 0);
   controls.dispose();
 });
 
