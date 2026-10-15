@@ -34,6 +34,10 @@ export const AI_DRIVERS = Object.freeze([
     skill: 1.3,
   },
   { name: "Ace", style: "racer", lane: 0, pace: 1, caution: 1.15, skill: 1.5 },
+  { name: "Dotty", style: "rookie", lane: 0.9, pace: 0.72, caution: 0.25, skill: 0.35 },
+  { name: "Otis", style: "steady", lane: -0.3, pace: 0.86, caution: 0.8, skill: 0.75 },
+  { name: "Juniper", style: "clean", lane: 0.35, pace: 0.96, caution: 1.25, skill: 1.15 },
+  { name: "Rook", style: "expert", lane: -0.15, pace: 1.02, caution: 1.2, skill: 1.7 },
 ]);
 
 const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
@@ -86,6 +90,7 @@ export function aiInput(
         ? AI_DRIVERS.find((entry) => entry.name === profile)
         : profile;
   const p = driver ?? AI_DRIVERS[0];
+  const skill = clamp(num(p.skill, 1), 0.2, 1.8);
   const s = num(racer?.s),
     lateral = num(racer?.lateral),
     speed = num(racer?.speed);
@@ -111,9 +116,9 @@ export function aiInput(
           ? 0.65
           : 0.3
       : 0;
-  const look = clamp(speed * 0.7 + 9, 10, 34);
+  const look = clamp(speed * (0.35 + skill * 0.28) + 6 + skill * 3, 8, 42);
   const hazard = (lane) =>
-    [0.45, 1, 1.6].reduce((cost, factor) => {
+    (skill < 0.6 ? [0.45, 1] : [0.45, 1, 1.6]).reduce((cost, factor) => {
       const sampleS = s + look * factor;
       const sampleHalf = Math.max(0.8, widthAt(roadAt, sampleS) / 2 - 0.85);
       const edgeCost = Math.max(0, Math.abs(lane) - sampleHalf) * 5;
@@ -124,7 +129,7 @@ export function aiInput(
       );
     }, 0);
   const laneScore = (lane) => {
-    const cost = hazard(lane) * (p.caution ?? 1);
+    const cost = hazard(lane) * (p.caution ?? 1) * (0.55 + skill * 0.45);
     const travel = Math.abs(lane - lateral) * 0.23;
     const preference =
       Math.abs(lane - num(p.lane)) * (p.style === "tactical" ? 0.12 : 0.3);
@@ -151,17 +156,16 @@ export function aiInput(
     (best, lane) => (laneScore(lane) < laneScore(best) ? lane : best),
     lanes[0],
   );
-  if (p.style === "rookie")
-    target += Math.sin(t * 2.7 + num(racer?.index)) * 0.42;
+  const error = Math.max(0, 1.55 - skill);
+  target += Math.sin(t * 2.7 + num(racer?.index) * 1.7) * error * 0.42;
   target = clamp(target, -half, half);
   let steer = clamp(
-    (target - lateral) * (p.style === "rookie" ? 0.68 : 0.42) -
-      num(racer?.steer) * (p.style === "rookie" ? 0.08 : 0.36),
+    (target - lateral) * (p.style === "rookie" ? 0.68 : 0.36 + skill * 0.06) -
+      num(racer?.steer) * (p.style === "rookie" ? 0.08 : 0.18 + skill * 0.14),
     -1,
     1,
   );
-  if (p.style === "rookie")
-    steer = clamp(steer + Math.sin(t * 3.6 + num(racer?.index)) * 0.15, -1, 1);
+  steer = clamp(steer + Math.sin(t * 3.6 + num(racer?.index)) * error * 0.15, -1, 1);
 
   const currentCost = surfaceCost(surfaceAt?.(s, lateral));
   const futureCost = hazard(target) / 3;
@@ -176,26 +180,29 @@ export function aiInput(
       ? Boolean(closing && speed > 32)
       : p.style === "rookie"
         ? Boolean(lateRookie)
-        : Boolean(braking || cautious);
-  const desiredSpeed = Math.max(
-    15,
-    num(racer?.stats?.topSpeed, 40) * num(p.pace, 0.9),
+        : Boolean((braking && speed > Math.max(8, 16 - skill * 5)) || cautious);
+  // Player swipes target roughly 10–22 m/s. Keep rivals in that range so
+  // paddle rhythm and line choice decide races without an unreachable speed gap.
+  const desiredSpeed = clamp(
+    (10 + skill * 8) * num(p.pace, 0.9),
+    8,
+    num(racer?.stats?.topSpeed, 40),
   );
   const strokePeriod =
     p.style === "rookie"
-      ? 0.43
+      ? 0.43 + (0.55 - skill) * 0.15
       : p.style === "cautious"
         ? 0.48
         : p.style === "aggressive"
           ? 0.29
           : p.style === "racer"
             ? 0.27
-            : 0.34;
+        : clamp(0.48 - skill * 0.105, 0.28, 0.45);
   const strokeIndex = Math.floor(
     (t + num(racer?.index) * 0.037) / strokePeriod,
   );
   const strokePhase = (t + num(racer?.index) * 0.037) % strokePeriod;
-  const forgets = p.style === "rookie" && strokeIndex % 4 === 2;
+  const forgets = p.style === "rookie" && strokeIndex % (skill < 0.45 ? 3 : 4) === 2;
   const paddle =
     !brake && !forgets && speed < desiredSpeed && strokePhase < 0.09;
   return {

@@ -1,4 +1,6 @@
 import LZString from "lz-string";
+import { RACE_SIZE, FAMILY_SEATS } from "./race-config.js";
+import { VEHICLES } from "./vehicles.js";
 
 const PREFIX = "DERBY1:";
 const encode = (value) =>
@@ -50,7 +52,7 @@ function gather(pc) {
 const finiteMessage = (data) =>
   Array.isArray(data) &&
   data.length > 0 &&
-  data.length <= 25 &&
+  data.length <= 1 + RACE_SIZE * 4 &&
   data.every(
     (n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= 3.4e38,
   );
@@ -67,8 +69,8 @@ const validSnapshot = (data) =>
     data.length === 2 &&
     Number.isInteger(data[1]) &&
     data[1] >= 1 &&
-    data[1] <= 5) ||
-    (data[0] === 88 && data.length >= 5 && (data.length - 1) % 4 === 0));
+    data[1] < FAMILY_SEATS) ||
+    (data[0] === 88 && data.length === 1 + RACE_SIZE * 4));
 
 /** Unordered, unretransmitted binary state channel. No STUN or TURN. */
 export class FamilyNetwork {
@@ -127,11 +129,11 @@ export class FamilyNetwork {
       try {
         if (
           event.data instanceof ArrayBuffer &&
-          event.data.byteLength <= 100 &&
+          event.data.byteLength <= (1 + RACE_SIZE * 4) * 4 &&
           event.data.byteLength % 4 === 0
         )
           data = Array.from(new Float32Array(event.data));
-        else if (typeof event.data === "string" && event.data.length <= 256) {
+        else if (typeof event.data === "string" && event.data.length <= 512) {
           data = JSON.parse(event.data);
           if (
             Array.isArray(data) &&
@@ -140,18 +142,18 @@ export class FamilyNetwork {
             this.role === "host" &&
             Number.isInteger(data[1]) &&
             data[1] >= 0 &&
-            data[1] <= 9
+            data[1] < VEHICLES.length
           )
             this.onVehicle(data[1], peer.id);
           else if (
             this.role === "guest" &&
             Array.isArray(data) &&
-            data.length === 7 &&
+            data.length === RACE_SIZE + 1 &&
             data[0] === 79 &&
             data
               .slice(1)
               .every(
-                (index) => Number.isInteger(index) && index >= 0 && index <= 9,
+                (index) => Number.isInteger(index) && index >= 0 && index < VEHICLES.length,
               )
           )
             this.onRoster(data.slice(1));
@@ -168,7 +170,7 @@ export class FamilyNetwork {
           else if (
             this.role === "guest" &&
             Array.isArray(data) &&
-            data.length === 7 &&
+            data.length === RACE_SIZE + 1 &&
             data[0] === 81 &&
             data
               .slice(1)
@@ -205,7 +207,7 @@ export class FamilyNetwork {
         peer.pc.close();
         this.peers.delete(id);
       }
-    if (this.peers.size >= 5)
+    if (this.peers.size >= FAMILY_SEATS - 1)
       throw new Error("This room already has six drivers, including the host.");
     this.role = "host";
     const id = crypto.randomUUID();
@@ -280,8 +282,8 @@ export class FamilyNetwork {
       for (const peer of this.peers.values()) this._send(peer, array);
   }
   sendVehicle(index) {
-    if (!Number.isInteger(index) || index < 0 || index > 9)
-      throw new TypeError("Vehicle must be 0–9.");
+    if (!Number.isInteger(index) || index < 0 || index >= VEHICLES.length)
+      throw new TypeError("Vehicle index is outside the garage catalog.");
     this.vehicleIndex = index;
     clearInterval(this.vehicleTimer);
     if (this.role !== "guest") return;
@@ -297,7 +299,7 @@ export class FamilyNetwork {
     this.vehicleTimer = setInterval(send, 1000);
   }
   sendSlot(id, slot) {
-    if (!Number.isInteger(slot) || slot < 1 || slot > 5)
+    if (!Number.isInteger(slot) || slot < 1 || slot >= FAMILY_SEATS)
       throw new TypeError("Guest slot must be 1–5.");
     const peer = this.peers.get(id);
     if (
@@ -310,12 +312,12 @@ export class FamilyNetwork {
   broadcastRoster(indices) {
     if (
       !Array.isArray(indices) ||
-      indices.length !== 6 ||
+      indices.length !== RACE_SIZE ||
       !indices.every(
-        (index) => Number.isInteger(index) && index >= 0 && index <= 9,
+        (index) => Number.isInteger(index) && index >= 0 && index < VEHICLES.length,
       )
     )
-      throw new TypeError("Roster must contain six vehicle indices from 0–9.");
+      throw new TypeError("Roster must contain ten valid garage vehicle indices.");
     if (this.role !== "host") return;
     const message = JSON.stringify([79, ...indices]);
     for (const peer of this.peers.values())
@@ -355,7 +357,7 @@ export class FamilyNetwork {
   broadcastResults(finishTimes) {
     if (
       !Array.isArray(finishTimes) ||
-      finishTimes.length !== 6 ||
+      finishTimes.length !== RACE_SIZE ||
       !finishTimes.every(
         (value) =>
           typeof value === "number" &&
@@ -364,7 +366,7 @@ export class FamilyNetwork {
       )
     )
       throw new TypeError(
-        "Results require six finite finish times, using -1 for unfinished.",
+        "Results require ten finite finish times, using -1 for unfinished.",
       );
     if (this.role === "host")
       for (const peer of this.peers.values())

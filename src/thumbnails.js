@@ -1,6 +1,6 @@
 // Render the actual vehicle meshes once for the garage cards. The game and
 // thumbnail scene share a renderer, so every state we change is restored.
-export function createVehicleThumbnails(THREE, renderer, createVehicle) {
+export function createVehicleThumbnails(THREE, renderer, createVehicle, count) {
   const width = 220,
     height = 130;
   const previousSize = renderer.getSize(new THREE.Vector2());
@@ -25,7 +25,7 @@ export function createVehicleThumbnails(THREE, renderer, createVehicle) {
     renderer.shadowMap.enabled = false;
     renderer.toneMappingExposure = Math.max(previousExposure, 1.55);
     renderer.setClearColor(0xb5c5ab, 1);
-    for (let index = 0; index < 10; index++) {
+    for (let index = 0; index < count; index++) {
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0xb5c5ab);
       scene.add(new THREE.HemisphereLight(0xffffff, 0x9b9b77, 3.2));

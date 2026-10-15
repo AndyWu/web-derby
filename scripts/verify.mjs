@@ -68,7 +68,7 @@ try {
     findings.checks.garage = await page.locator("#garage").isVisible();
     findings.checks.vehicleCount = await page.locator("[data-car]").count();
     await page.locator("#start").click();
-    await page.waitForFunction(() => window.__derby.racers.length === 6, null, {
+    await page.waitForFunction(() => window.__derby.racers.length === 10, null, {
       timeout: 10000,
       polling: 100,
     });
@@ -91,7 +91,7 @@ try {
     await ready(page);
     await page.locator("#garage-btn").click();
     await page.locator("#start").click();
-    await page.waitForFunction(() => window.__derby.racers.length === 6, null, {
+    await page.waitForFunction(() => window.__derby.racers.length === 10, null, {
       timeout: 10000,
       polling: 100,
     });
@@ -250,7 +250,7 @@ try {
       timeout: 5000,
       polling: 100,
     });
-    await page.evaluate(() => window.net.broadcast([88, 10, 0, 3, 0]));
+    await page.evaluate(() => window.net.broadcast([88, ...Array.from({ length: 10 }, (_, i) => [10 + i, 0, 3, 0]).flat()]));
     await guest.waitForFunction(
       () => window.receivedSnapshot?.[0] === 88,
       null,
@@ -291,8 +291,8 @@ try {
         window.roster = models;
       };
     });
-    await page.evaluate(() => window.net.broadcastRoster([0, 3, 2, 4, 5, 9]));
-    await guest.waitForFunction(() => window.roster?.length === 6, null, {
+    await page.evaluate(() => window.net.broadcastRoster([0, 3, 2, 4, 5, 9, 6, 7, 8, 11]));
+    await guest.waitForFunction(() => window.roster?.length === 10, null, {
       timeout: 5000,
       polling: 100,
     });
@@ -313,7 +313,7 @@ try {
     });
     await page.evaluate(() => window.net.broadcastRace(101, 1));
     await guest.waitForFunction(() => window.raceState?.[0] === 101 && window.raceState?.[1] === 1, null, { timeout: 5000, polling: 100 });
-    await page.evaluate(() => window.net.broadcastResults([12, 14, -1, 16, 18, 20]));
+    await page.evaluate(() => window.net.broadcastResults([12, 14, -1, 16, 18, 20, 22, 24, 26, 28]));
     await guest.waitForFunction(() => window.finishTimes?.[0] === 12, null, { timeout: 5000, polling: 100 });
     await page.evaluate(() => window.net.broadcastRace(101, 0));
     await guest.waitForFunction(() => window.raceState?.[1] === 0, null, { timeout: 5000, polling: 100 });
@@ -374,7 +374,7 @@ try {
     );
     await page.evaluate(() => window.__derby.start());
     await guest.waitForFunction(
-      () => window.__derby.running && window.__derby.racers.length === 6,
+      () => window.__derby.running && window.__derby.racers.length === 10,
       null,
       { timeout: 5000, polling: 100 },
     );

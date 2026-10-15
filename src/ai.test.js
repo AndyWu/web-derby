@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AI_DRIVERS, aiInput } from "./ai.js";
-import { createRacer, disposeRacer, stepRacer } from "./physics.js";
+import { createRacer, disposeRacer, resolveRacerContacts, stepRacer } from "./physics.js";
 import { roadAt, surfaceAt } from "./scene.js";
 import { VEHICLES } from "./vehicles.js";
 
@@ -17,10 +17,10 @@ const racer = (overrides = {}) => ({
   ...overrides,
 });
 
-test("five named drivers provide the full control interface", () => {
+test("nine named drivers provide the full control interface", () => {
   assert.deepEqual(
     AI_DRIVERS.map((driver) => driver.name),
-    ["Barnaby", "Clementine", "Buster", "Maeve", "Ace"],
+    ["Barnaby", "Clementine", "Buster", "Maeve", "Ace", "Dotty", "Otis", "Juniper", "Rook"],
   );
   for (const profile of AI_DRIVERS) {
     const input = aiInput(profile, racer(), [], 0, road, dry);
@@ -115,7 +115,45 @@ test("Ace gets the strongest draft from a nearby car ahead", () => {
   );
 });
 
-test("all five rivals finish the real course within fifteen simulated minutes", () => {
+test("skill changes anticipation, steering error, and paddle cadence", () => {
+  const novice = AI_DRIVERS[5];
+  const expert = AI_DRIVERS[8];
+  const low = aiInput(novice, racer(), [], 0.5, road, dry);
+  const high = aiInput(expert, racer(), [], 0.5, road, dry);
+  assert.notEqual(low.steer, high.steer);
+  assert.ok(expert.skill > novice.skill);
+  let noviceStrokes = 0;
+  let expertStrokes = 0;
+  for (let i = 0; i < 200; i++) {
+    const t = i * 0.02;
+    const a = aiInput(novice, racer(), [], t, road, dry);
+    const b = aiInput(expert, racer(), [], t, road, dry);
+    noviceStrokes += Number(a.leftPaddle || a.rightPaddle);
+    expertStrokes += Number(b.leftPaddle || b.rightPaddle);
+  }
+  assert.ok(expertStrokes > noviceStrokes);
+});
+
+test("a skilled driver beats a novice in the same car", () => {
+  const run = (profile) => {
+    const entry = createRacer(VEHICLES[4], 0);
+    try {
+      for (let step = 0; step < 9000 && !entry.finished; step++) {
+        stepRacer(entry, aiInput(profile, entry, [entry], step * 0.1, roadAt, surfaceAt),
+          0.1, roadAt, surfaceAt);
+      }
+      assert.ok(entry.finished, `${profile.name} did not finish`);
+      return entry.finishTime;
+    } finally {
+      disposeRacer(entry);
+    }
+  };
+  const novice = run(AI_DRIVERS[5]);
+  const expert = run(AI_DRIVERS[8]);
+  assert.ok(expert < novice * 0.75, `expert ${expert}s, novice ${novice}s`);
+});
+
+test("all nine rivals finish the real course in a ten-car race", () => {
   const racers = AI_DRIVERS.map((_, index) =>
     // Hold the chassis constant so this checks driver personalities rather
     // than depending on which cars happen to occupy the first garage slots.
@@ -151,6 +189,7 @@ test("all five rivals finish the real course within fifteen simulated minutes", 
           surfaceAt,
         );
       }
+      resolveRacerContacts(pack, dt);
       if (step % 50 === 0) {
         const order = [...racers].sort((a, b) => b.s - a.s).map((r) => r.index);
         if (order.some((id, rank) => id !== previousOrder[rank])) overtakes++;
@@ -163,11 +202,11 @@ test("all five rivals finish the real course within fifteen simulated minutes", 
         .map((r, i) => `${AI_DRIVERS[i].name}: ${r.s.toFixed(1)}m`)
         .join(", "),
     );
-    assert.ok(player.finished, "sixth racer should finish too");
+    assert.ok(player.finished, "tenth racer should finish too");
     assert.ok(racers.every((r) => r.finishTime <= 900));
     assert.ok(overtakes > 0, "rivals should exchange positions during the run");
     assert.ok(
-      new Set(racers.map((r) => Math.round(r.finishTime))).size >= 4,
+      new Set(racers.map((r) => Math.round(r.finishTime))).size >= 6,
       "profiles should produce meaningfully different finish times",
     );
   } finally {

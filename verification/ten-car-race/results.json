@@ -1,0 +1,65 @@
+{
+  "errors": [],
+  "garage": [
+    "Skipper 14",
+    "Bare Bones",
+    "Blue Barrel",
+    "Sunshine Kart",
+    "The Scarecrow",
+    "Green Bean",
+    "Sunday Special",
+    "Firefly",
+    "Miss Georgia",
+    "Silver Claw",
+    "Tiger Stripe",
+    "Shuttlecraft"
+  ],
+  "cockpits": [
+    {
+      "index": 7,
+      "name": "Firefly",
+      "cars": 10,
+      "headlight": true
+    },
+    {
+      "index": 8,
+      "name": "Miss Georgia",
+      "cars": 10,
+      "headlight": true
+    },
+    {
+      "index": 9,
+      "name": "Silver Claw",
+      "cars": 10,
+      "headlight": true
+    },
+    {
+      "index": 10,
+      "name": "Tiger Stripe",
+      "cars": 10,
+      "headlight": true
+    },
+    {
+      "index": 11,
+      "name": "Shuttlecraft",
+      "cars": 10,
+      "headlight": true
+    }
+  ],
+  "network": {
+    "snapshotFloats": 41,
+    "roster": [
+      0,
+      11,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "results": 10
+  }
+}

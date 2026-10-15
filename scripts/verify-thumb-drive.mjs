@@ -43,8 +43,8 @@ for (const [name, engine] of [['chromium',chromium],['webkit',webkit]]) {
     assert.equal(await page.evaluate(()=>window.__derby.racers[0]._boostTime),0);
     await page.locator('#dashboard-light').click();
     await page.waitForFunction(()=>document.querySelector('#dashboard-light').getAttribute('aria-pressed')==='true');
-    await page.evaluate(()=>{window.__derby.renderEnabled=true;window.__derby.racers[0].s=200;for(let i=1;i<6;i++)window.__derby.racers[i].s=100-i*8;});
-    await page.waitForFunction(()=>document.querySelector('#race-rank').textContent==='1/6');
+    await page.evaluate(()=>{window.__derby.renderEnabled=true;window.__derby.racers[0].s=200;for(let i=1;i<window.__derby.racers.length;i++)window.__derby.racers[i].s=100-i*8;});
+    await page.waitForFunction(()=>document.querySelector('#race-rank').textContent==='1/10');
     await page.screenshot({path:`verification/thumb-drive/${name}-phone.png`});
     await page.evaluate(()=>window.__derby.renderEnabled=false);
     await fire('.swipe-left','pointerup',3,200);

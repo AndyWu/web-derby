@@ -1,6 +1,7 @@
 import { createReferenceVehicle } from "./reference-vehicles.js";
+import { createPhotoVehicle } from "./photo-vehicles.js";
 
-// Ten salvaged downhill machines. All dimensions are in metres; the driver
+// Twelve salvaged downhill machines. All dimensions are in metres; the driver
 // looks toward -Z from just behind the dash.
 export const VEHICLES = [
   {
@@ -52,18 +53,6 @@ export const VEHICLES = [
     paddleForce: 3.3,
   },
   {
-    name: "Blackberry Jam",
-    subtitle: "Sticky tires, questionable steering",
-    trait: "Strong corner grip, slower to accelerate",
-    color: 0x784e74,
-    mass: 103,
-    drag: 0.87,
-    grip: 1.18,
-    handling: 0.92,
-    topSpeed: 41,
-    paddleForce: 3.0,
-  },
-  {
     name: "The Scarecrow",
     subtitle: "Built from everything left in the shed",
     trait: "Featherlight and twitchy on loose ground",
@@ -88,18 +77,6 @@ export const VEHICLES = [
     paddleForce: 3.7,
   },
   {
-    name: "Rustbucket",
-    subtitle: "Held together with optimism and rope",
-    trait: "Heavy, stable, and slow off the line",
-    color: 0xa05b3e,
-    mass: 121,
-    drag: 1.03,
-    grip: 1.08,
-    handling: 0.76,
-    topSpeed: 38,
-    paddleForce: 2.8,
-  },
-  {
     name: "Sunday Special",
     subtitle: "A picnic table with racing stripes",
     trait: "Easy steering and forgiving road grip",
@@ -112,16 +89,39 @@ export const VEHICLES = [
     paddleForce: 3.2,
   },
   {
-    name: "Thunder Pumpkin",
-    subtitle: "Big orange trouble at the bend",
-    trait: "Weighty momentum with measured cornering",
-    color: 0xc67835,
-    mass: 108,
-    drag: 0.91,
-    grip: 0.99,
-    handling: 0.94,
-    topSpeed: 42,
-    paddleForce: 3.0,
+    name: "Firefly",
+    subtitle: "A yellow torpedo with hand-painted flames",
+    trait: "Fast straight-line glide with gentle steering",
+    color: 0xf4d92b,
+    mass: 91, drag: 0.68, grip: 0.91, handling: 0.96, topSpeed: 49, paddleForce: 3.1,
+  },
+  {
+    name: "Miss Georgia",
+    subtitle: "A blue-and-white flying milk racer",
+    trait: "Light nose, lively turns, and high top speed",
+    color: 0x2b708f,
+    mass: 83, drag: 0.72, grip: 0.89, handling: 1.25, topSpeed: 48, paddleForce: 3.4,
+  },
+  {
+    name: "Silver Claw",
+    subtitle: "A silver streamliner with three black slashes",
+    trait: "Low drag and planted cornering",
+    color: 0xbfc4c5,
+    mass: 98, drag: 0.65, grip: 1.04, handling: 1.03, topSpeed: 50, paddleForce: 3.0,
+  },
+  {
+    name: "Tiger Stripe",
+    subtitle: "A bright orange racer with bold black stripes",
+    trait: "Quick paddle launch and bold cornering",
+    color: 0xec5135,
+    mass: 78, drag: 0.77, grip: 0.94, handling: 1.27, topSpeed: 46, paddleForce: 3.5,
+  },
+  {
+    name: "Shuttlecraft",
+    subtitle: "A boxy homemade ship with side nacelles",
+    trait: "Heavy and stable with strong road grip",
+    color: 0xeeeae2,
+    mass: 114, drag: 1.01, grip: 1.12, handling: 0.86, topSpeed: 40, paddleForce: 2.8,
   },
 ];
 
@@ -227,9 +227,12 @@ function paintedLabel(THREE, words) {
 }
 
 export function createVehicle(THREE, index = 0, cockpit = false) {
-  const id = ((index % VEHICLES.length) + VEHICLES.length) % VEHICLES.length;
-  const spec = VEHICLES[id];
-  if (id < 4) return createReferenceVehicle(THREE, id, cockpit, spec);
+  const selection = ((index % VEHICLES.length) + VEHICLES.length) % VEHICLES.length;
+  const spec = VEHICLES[selection];
+  if (selection < 4) return createReferenceVehicle(THREE, selection, cockpit, spec);
+  if (selection >= 7) return createPhotoVehicle(THREE, selection - 7, cockpit, spec);
+  // Preserve the existing handmade meshes for the three retained trucks.
+  const id = [5, 6, 8][selection - 4];
   const group = new THREE.Group();
   group.name = spec.name;
   const mat = (color, metalness = 0, roughness = 0.86) =>
