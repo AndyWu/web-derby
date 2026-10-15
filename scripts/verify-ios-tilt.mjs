@@ -198,6 +198,36 @@ for (const [engineName, engine] of [
       await page.locator("#garage .tilt-safari-link").isVisible(),
       true,
     );
+    // A slow iPad event can arrive after the diagnostic timeout. Permissioned
+    // listeners must remain live, and a fresh reading should restore steering.
+    await page.evaluate(() => {
+      dispatchEvent(
+        new DeviceOrientationEvent("deviceorientation", {
+          beta: 0,
+          gamma: -90,
+        }),
+      );
+      dispatchEvent(
+        new DeviceOrientationEvent("deviceorientation", {
+          beta: 12,
+          gamma: -90,
+        }),
+      );
+    });
+    assert.equal(await page.evaluate(() => __derby.controls.gyroStatus), "enabled");
+    assert.ok(await page.evaluate(() => __derby.controls.gyro > 0.35 && __derby.controls.gyro < 0.65));
+    await page.locator("#back").click();
+    await page.locator("#family-btn").click();
+    assert.equal(await page.locator("#lobby-tilt").isVisible(), true);
+    await page.evaluate(() => {
+      __derby.controls._stopGyroListeners();
+      __derby.controls._setGyroStatus("not-enabled");
+    });
+    const callsBeforeLobby = await page.evaluate(() => window.sensorCalls.length);
+    await page.locator("#lobby-tilt").click();
+    await page.waitForFunction(() => __derby.controls.gyroStatus === "waiting");
+    assert.equal(await page.evaluate(() => __derby.controls.gyroStatus), "waiting");
+    assert.equal(await page.evaluate(() => window.sensorCalls.length), callsBeforeLobby + 2);
     evidence.engines.push({
       engine: engineName,
       permissionClick: waiting,
@@ -207,6 +237,8 @@ for (const [engineName, engine] of [
       motionFallback: fallback,
       denied: true,
       noData: true,
+      delayedRecovery: true,
+      familyLobbyEnable: true,
       errors,
     });
     assert.deepEqual(errors, []);

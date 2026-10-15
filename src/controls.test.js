@@ -157,7 +157,7 @@ test("orientation-only permission works and 12-degree wheel turn steers right at
   }
 });
 
-test("no sensor data times out and cleans up listeners", async () => {
+test("no sensor data reports timeout but later samples recover without another permission prompt", async () => {
   const originalSetTimeout = globalThis.setTimeout;
   const originalClearTimeout = globalThis.clearTimeout;
   let timeout;
@@ -176,8 +176,22 @@ test("no sensor data times out and cleans up listeners", async () => {
     assert.equal(controls.gyroStatus, "waiting");
     timeout();
     assert.equal(controls.gyroStatus, "no-data");
-    assert.equal(harness.listeners.has("devicemotion"), false);
+    assert.equal(harness.listeners.has("devicemotion"), true);
     assert.equal(controls.gyroEnabled, false);
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: -9.8, y: 0, z: 0 },
+    });
+    assert.equal(controls.gyroStatus, "enabled");
+    assert.equal(controls.gyroEnabled, true);
+    controls.recalibrate();
+    timeout();
+    assert.equal(controls.gyroStatus, "no-data");
+    assert.equal(await controls.enableGyro(), true);
+    assert.equal(controls.gyroStatus, "waiting");
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: -9.8, y: 0, z: 0 },
+    });
+    assert.equal(controls.gyroStatus, "enabled");
   } finally {
     controls.dispose();
     harness.restore();
@@ -248,6 +262,9 @@ test("flat sensor samples wait; roll crossing ±180 degrees stays finite and sma
     assert.equal(await controls.enableGyro(), true);
     harness.emit("devicemotion", {
       accelerationIncludingGravity: { x: 0, y: 0, z: -9.8 },
+    });
+    harness.emit("devicemotion", {
+      accelerationIncludingGravity: { x: 0.2, y: 0, z: -9.8 },
     });
     assert.equal(controls.gyroStatus, "waiting");
     harness.emit("devicemotion", {

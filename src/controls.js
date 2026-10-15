@@ -11,8 +11,13 @@ function screenAngle() {
 }
 
 function gravityRoll(x, y, z) {
-  if (![x, y, z].every(Number.isFinite) || Math.hypot(x, y, z) < 0.15)
+  if (![x, y, z].every(Number.isFinite))
     return null;
+  const magnitude = Math.hypot(x, y, z);
+  if (magnitude < 0.15) return null;
+  x /= magnitude;
+  y /= magnitude;
+  z /= magnitude;
   const angle = screenAngle() * radians;
   const sx = x * Math.cos(angle) + y * Math.sin(angle);
   const sy = -x * Math.sin(angle) + y * Math.cos(angle);
@@ -230,7 +235,6 @@ export class Controls {
     this._clearGyroTimer();
     this._gyroTimer = setTimeout(() => {
       if (this.gyroStatus === "waiting") {
-        this._stopGyroListeners();
         this._setGyroStatus("no-data");
       }
     }, 2500);
@@ -250,7 +254,10 @@ export class Controls {
       this._setGyroStatus("insecure");
       return false;
     }
-    if (this._sensorListening) return true;
+    if (this._sensorListening) {
+      if (this.gyroStatus === "no-data") this.recalibrate();
+      return true;
+    }
     this._setGyroStatus("requesting");
     const requests = [];
     // Invoke both APIs before awaiting either: iOS requires transient activation.

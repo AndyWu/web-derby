@@ -38,7 +38,7 @@ document.querySelector("#app").innerHTML = `<canvas class="game"></canvas>
 <button id="dashboard-light" aria-label="Toggle physical dashboard headlight switch" aria-pressed="false" title="Headlight switch (L)"></button>
 </div>
 <button class="race-menu hidden" id="pause">Garage ↗</button>
-<section id="lobby" class="modal hidden"><div class="eyebrow">Offline family race · six family seats · ten cars</div><h2>Meet at the starting line.</h2><p>Race with ten cars, with bots filling every open place. Install once while online. Then connect every device to the same Wi-Fi or a supported Personal Hotspot. No signaling server is used. Hotspot support and local peer connections depend on your devices and network.</p><div class="actions"><button id="host">Host family race</button><button id="scan">Scan connection QR</button><button id="close-lobby">Close</button></div><div class="qr-row"><div class="qr-placeholder" id="qr-placeholder">Your connection QR will appear here.<br>Host a race or scan an invitation.</div><canvas id="qr" class="hidden"></canvas><div><p id="network-status">Host displays an offer. Guest scans it and shows an answer. Host scans the answer. Repeat for each guest.</p><video id="scanner" playsinline muted class="hidden"></video></div></div><textarea id="code" placeholder="Connection code — copy/paste fallback" aria-label="Connection code"></textarea><div class="actions"><button id="accept">Use connection code</button><button id="copy">Copy code</button><button id="family-pass">Create demo family pass</button><button id="race-room">Start family race</button></div><p id="offline-status" class="help">Offline cache is preparing. Keep this page open while online.</p><p id="pass-status" class="help">Family pass is a signed six-seat local demo. It does not verify a purchase.</p></section>
+<section id="lobby" class="modal hidden"><div class="eyebrow">Offline family race · six family seats · ten cars</div><h2>Meet at the starting line.</h2><p>Race with ten cars, with bots filling every open place. Install once while online. Then connect every device to the same Wi-Fi or a supported Personal Hotspot. No signaling server is used. Hotspot support and local peer connections depend on your devices and network.</p><div class="actions"><button id="lobby-tilt">Enable iOS tilt steering</button><button id="host">Host family race</button><button id="scan">Scan connection QR</button><button id="close-lobby">Close</button></div><p id="family-connections" role="status" aria-live="polite"></p><div class="qr-row"><div class="qr-placeholder" id="qr-placeholder">Your connection QR will appear here.<br>Host a race or scan an invitation.</div><canvas id="qr" class="hidden"></canvas><div><p id="network-status">Host displays an offer. Guest scans it and shows an answer. Host scans the answer. Repeat for each guest.</p><video id="scanner" playsinline muted class="hidden"></video></div></div><textarea id="code" placeholder="Connection code — copy/paste fallback" aria-label="Connection code"></textarea><div class="actions"><button id="accept">Use connection code</button><button id="copy">Copy code</button><button id="family-pass">Create demo family pass</button><button id="race-room">Start family race</button></div><p id="offline-status" class="help">Offline cache is preparing. Keep this page open while online.</p><p id="pass-status" class="help">Family pass is a signed six-seat local demo. It does not verify a purchase.</p></section>
 <section id="finish" class="modal hidden"><div class="eyebrow">The old farm finish line</div><h2>You made it down.</h2><p id="results"></p><button id="again">Back to the garage</button></section><div id="portrait"><div><h2>Turn toward the road.</h2><p>Hold your device in landscape with both hands.</p></div></div>`;
 const $ = (s) => document.querySelector(s),
   canvas = $("canvas.game");
@@ -268,7 +268,7 @@ function refreshTiltUI(state = controls.gyroStatus) {
       "An embedded browser or its permissions policy may block motion. Open the game directly in Safari and tap Enable tilt.",
   };
   const active = ["requesting", "waiting", "enabled"].includes(state);
-  for (const id of ["gyro", "guide-tilt"]) {
+  for (const id of ["gyro", "guide-tilt", "lobby-tilt"]) {
     const button = $("#" + id);
     if (button) {
       button.disabled = state === "requesting";
@@ -301,7 +301,12 @@ function requestTilt() {
   return request.then(() => refreshTiltUI());
 }
 $("#gyro").onclick = requestTilt;
-$("#family-btn").onclick = () => showModal($("#lobby"));
+$("#lobby-tilt").onclick = requestTilt;
+$("#family-btn").onclick = () => {
+  refreshFamilyLobby();
+  refreshTiltUI();
+  showModal($("#lobby"));
+};
 $("#close-lobby").onclick = () => {
   hideModal($("#lobby"));
   stopScan();
@@ -326,6 +331,7 @@ const tiltPanel = () =>
   `<div class="tilt-feedback hidden"><svg class="tilt-dial" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26"/><circle cx="32" cy="32" r="6"/><path d="M8 22 27 30M56 22 37 30M32 38v20"/></svg><div><strong class="tilt-feedback-title" role="status" aria-live="polite"></strong><p class="tilt-feedback-copy"></p><button class="tilt-recenter hidden" type="button">Recenter wheel</button><a class="tilt-safari-link hidden" href="${new URL(import.meta.env.BASE_URL, location.href).href}" target="_blank" rel="noopener">Game link to open in Safari ↗</a></div></div>`;
 $("#garage .actions").insertAdjacentHTML("afterend", tiltPanel());
 $("#drive-guide .actions").insertAdjacentHTML("afterend", tiltPanel());
+$("#lobby .actions").insertAdjacentHTML("afterend", tiltPanel());
 document
   .querySelectorAll(".tilt-recenter")
   .forEach((button) => (button.onclick = () => controls.recalibrate()));
@@ -336,6 +342,17 @@ $("#hands-ready").onclick = () => {
   hideModal(guide);
   start(true);
 };
+function refreshFamilyLobby() {
+  const connected = net.connectedCount;
+  const host = net.role === "host";
+  $("#family-connections").textContent = connected
+    ? `${connected + 1} connected family drivers on this link. ${host ? `${RACE_SIZE - connected - 1} bot places remain. Scan each guest’s answer before starting.` : "Enable tilt on this iPad, then wait for the host to start."}`
+    : "No other players connected yet. Host creates an offer → guest scans it → host scans the guest’s answer. Sharing Wi-Fi alone does not join a race.";
+  $("#race-room").disabled = !host || connected === 0;
+  $("#race-room").textContent = host && connected > 0
+    ? `Start with ${connected + 1} family drivers`
+    : net.role === "guest" ? "Waiting for host" : "Connect a guest to start";
+}
 const status = (t) => ($("#network-status").textContent = t);
 prepareDialog(guide);
 const leaveButton = document.createElement("button");
@@ -359,6 +376,7 @@ leaveButton.onclick = () => {
   status("You left the room. Host or scan an invitation to reconnect.");
 };
 net.onStatus = (s, id) => {
+  refreshFamilyLobby();
   if (s === "connected" && net.role === "host" && !peerSlots.has(id)) {
     const slot = Array.from({ length: FAMILY_SEATS - 1 }, (_, i) => i + 1).find(
       (n) => ![...peerSlots.values()].includes(n),
@@ -479,6 +497,7 @@ $("#host").onclick = async () => {
   try {
     status("Gathering local connection candidates…");
     await displayCode(await net.hostOffer());
+    refreshFamilyLobby();
     status("Guest: scan this offer, then show your answer QR.");
   } catch (e) {
     status(e.message);
@@ -491,6 +510,7 @@ async function useCode(code) {
       status("Answer accepted. Connecting…");
     } else {
       await displayCode(await net.joinOffer(code));
+      refreshFamilyLobby();
       status("Show this answer QR to the host.");
     }
   } catch (e) {
@@ -569,6 +589,11 @@ loadFamilyPass()
   })
   .catch(() => {});
 $("#race-room").onclick = () => {
+  if (net.role !== "host" || net.connectedCount === 0) {
+    refreshFamilyLobby();
+    status("Connect another iPad first: complete both offer and answer QR scans, then wait for Connected.");
+    return;
+  }
   if (net.role === "guest") {
     status("Waiting for the host to start.");
     return;
@@ -579,6 +604,7 @@ $("#race-room").onclick = () => {
       p.channel.send(JSON.stringify([77, peerSlots.get(id)]));
   }
 };
+refreshFamilyLobby();
 function resize() {
   $("#portrait").style.display =
     navigator.maxTouchPoints > 0 && innerHeight > innerWidth ? "flex" : "none";
