@@ -1,0 +1,17 @@
+{
+  "mode": "controls",
+  "url": "http://127.0.0.1:5173",
+  "screenshots": [],
+  "errors": [],
+  "checks": {
+    "controls": {
+      "swipe": true,
+      "brake": true,
+      "reverse": true,
+      "reverseLatched": true,
+      "reverseKeyOff": true,
+      "enabled": true,
+      "gyroSteer": 0.5
+    }
+  }
+}

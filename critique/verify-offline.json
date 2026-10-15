@@ -1,0 +1,10 @@
+{
+  "mode": "offline",
+  "url": "http://127.0.0.1:4173",
+  "screenshots": [],
+  "errors": [],
+  "checks": {
+    "controlled": true,
+    "offlineReload": true
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "mode": "mobile",
+  "url": "http://127.0.0.1:4173",
+  "screenshots": [
+    "round-9-mobile-garage.png",
+    "round-9-mobile-guide.png",
+    "round-9-mobile-portrait.png",
+    "round-9-tablet-portrait.png"
+  ],
+  "errors": [],
+  "checks": {
+    "mobileGarage": {
+      "startVisible": true,
+      "startBox": {
+        "x": 25.3125,
+        "y": 311.90625,
+        "width": 157.40625,
+        "height": 44
+      },
+      "viewportHeight": 390,
+      "startInViewport": true
+    },
+    "mobileGuide": {
+      "readyVisible": true,
+      "readyBox": {
+        "x": 331.296875,
+        "y": 234.78125,
+        "width": 215.75,
+        "height": 44
+      }
+    },
+    "portrait": true,
+    "tabletPortrait": true,
+    "desktopPortrait": false
+  }
+}

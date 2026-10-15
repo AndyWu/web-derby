@@ -1,0 +1,10 @@
+{
+  "sixProfiles": true,
+  "namesMatch": true,
+  "demoLabel": "self-issued-demo",
+  "purchased": false,
+  "tamperRejected": true,
+  "tamperedPersistRejected": true,
+  "seventhRejected": true,
+  "survivesReload": true
+}

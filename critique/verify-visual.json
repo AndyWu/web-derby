@@ -1,0 +1,21 @@
+{
+  "mode": "visual",
+  "url": "http://127.0.0.1:4173",
+  "screenshots": [
+    "round-4-home.png",
+    "round-4-garage.png",
+    "round-4-cockpit.png"
+  ],
+  "errors": [
+    "page.screenshot: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - taking page screenshot\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\n    at shot (/Users/andywu/Documents/ChatGPT/web derby/scripts/verify.mjs:25:14)\n    at /Users/andywu/Documents/ChatGPT/web derby/scripts/verify.mjs:55:11"
+  ],
+  "checks": {
+    "home": true,
+    "garage": true,
+    "vehicleCount": 10,
+    "race": true,
+    "racerCount": 6,
+    "motionBefore": 5.000000621717589,
+    "motionAfter": 5.000000621717589
+  }
+}

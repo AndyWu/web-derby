@@ -1,0 +1,746 @@
+import * as THREE from "three";
+import QRCode from "qrcode";
+import jsQR from "jsqr";
+import "./style.css";
+import { createEnvironment, roadAt, surfaceAt } from "./scene.js";
+import { VEHICLES, createVehicle } from "./vehicles.js";
+import {
+  createRacer,
+  stepRacer,
+  disposeRacer,
+  resolveRacerContacts,
+} from "./physics.js";
+import { Controls } from "./controls.js";
+import {
+  FamilyNetwork,
+  createFamilyPass,
+  verifyFamilyPass,
+  persistFamilyPass,
+  loadFamilyPass,
+} from "./network.js";
+import { DerbyAudio } from "./audio.js";
+import { setupGraphics } from "./graphics.js";
+import { AI_DRIVERS, aiInput } from "./ai.js";
+import { SnapshotBuffer } from "./replication.js";
+import { createVehicleThumbnails } from "./thumbnails.js";
+import { disposeVehicle } from "./resources.js";
+
+document.querySelector("#app").innerHTML = `<canvas class="game"></canvas>
+<section class="screen" id="home"><div class="content"><div class="eyebrow">The countryside is calling · Est. 1978</div><div class="rule"></div><h1>Hollow<br><i>Run.</i></h1><p>Six drivers. Two miles. Nothing but gravity.<br>A homemade soapbox derby down the old farm road.</p><div class="actions"><button class="primary" id="garage-btn">Take the wheel ↗</button><button id="family-btn">Family race</button></div><div class="help">BUILT BY HAND. DRIVEN BY FEEL.</div></div><div class="top-mark">SOAPBOX DERBY / 01</div><div class="footer">3218 METRES OF DIRT &nbsp; / &nbsp; ONE WAY DOWN</div></section>
+<section class="screen hidden" id="garage"><div class="garage"><div class="eyebrow">The backyard garage</div><h2>Pick your pride & joy.</h2><p id="vehicle-desc"></p><div class="choices" id="choices"></div><div class="specs" id="specs"></div><div class="actions"><button class="primary" id="start">Roll downhill ↗</button><button id="gyro">Enable tilt steering</button><button id="back">Back</button></div><p class="help">DESKTOP: A / D steer · alternate W / S to paddle · SPACE brake · L light · R toggle gear<br>TOUCH: swipe each side to paddle · hold bottom-left to brake · bottom-right light / gear. Tilt your device to steer.</p></div></section>
+<button class="race-menu hidden" id="pause">Garage ↗</button>
+<section id="lobby" class="modal hidden"><div class="eyebrow">Offline family race · up to six</div><h2>Meet at the starting line.</h2><p>Install once while online. Then connect every device to the same Wi-Fi or a supported Personal Hotspot. No signaling server is used. Hotspot support and local peer connections depend on your devices and network.</p><div class="actions"><button id="host">Host family race</button><button id="scan">Scan connection QR</button><button id="close-lobby">Close</button></div><div class="qr-row"><div class="qr-placeholder" id="qr-placeholder">Your connection QR will appear here.<br>Host a race or scan an invitation.</div><canvas id="qr" class="hidden"></canvas><div><p id="network-status">Host displays an offer. Guest scans it and shows an answer. Host scans the answer. Repeat for each guest.</p><video id="scanner" playsinline muted class="hidden"></video></div></div><textarea id="code" placeholder="Connection code — copy/paste fallback" aria-label="Connection code"></textarea><div class="actions"><button id="accept">Use connection code</button><button id="copy">Copy code</button><button id="family-pass">Create demo family pass</button><button id="race-room">Start family race</button></div><p id="offline-status" class="help">Offline cache is preparing. Keep this page open while online.</p><p id="pass-status" class="help">Family pass is a signed six-seat local demo. It does not verify a purchase.</p></section>
+<section id="finish" class="modal hidden"><div class="eyebrow">The old farm finish line</div><h2>You made it down.</h2><p id="results"></p><button id="again">Back to the garage</button></section><div id="portrait"><div><h2>Turn toward the road.</h2><p>Hold your device in landscape with both hands.</p></div></div>`;
+const $ = (s) => document.querySelector(s),
+  canvas = $("canvas.game");
+const modalFocus = new WeakMap();
+function showModal(element) {
+  modalFocus.set(element, document.activeElement);
+  element.classList.remove("hidden");
+  element.querySelector("button,textarea")?.focus({ preventScroll: true });
+}
+function hideModal(element) {
+  element.classList.add("hidden");
+  modalFocus.get(element)?.focus?.({ preventScroll: true });
+}
+function prepareDialog(element) {
+  element.setAttribute("role", "dialog");
+  element.setAttribute("aria-modal", "true");
+  element.setAttribute(
+    "aria-label",
+    element.querySelector("h2")?.textContent || "Race dialog",
+  );
+}
+document.querySelectorAll(".modal").forEach(prepareDialog);
+document.addEventListener("keydown", (event) => {
+  const modal = [...document.querySelectorAll(".modal")].find(
+    (el) => !el.classList.contains("hidden"),
+  );
+  if (!modal) return;
+  if (event.key === "Tab") {
+    const items = [...modal.querySelectorAll("button,textarea")].filter(
+      (el) => !el.disabled,
+    );
+    const first = items[0],
+      last = items.at(-1);
+    if (!modal.contains(document.activeElement)) {
+      event.preventDefault();
+      first?.focus();
+    } else if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    hideModal(modal);
+    if (modal.id === "lobby") stopScan();
+    if (modal.id === "finish") garage();
+  }
+});
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  powerPreference: "high-performance",
+});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene();
+createEnvironment(THREE, scene);
+const graphics = setupGraphics(THREE, renderer, scene);
+const camera = new THREE.PerspectiveCamera(
+  68,
+  innerWidth / innerHeight,
+  0.08,
+  650,
+);
+const controls = new Controls(canvas),
+  audio = new DerbyAudio(),
+  net = new FamilyNetwork();
+let selected = 0,
+  car,
+  racers = [],
+  opponents = [],
+  running = false,
+  clockTime = 0,
+  last = performance.now(),
+  networkClock = 0,
+  guestIndex = 1,
+  slotClock = 0,
+  startDelay = 0,
+  thumbnails = [],
+  raceCompleted = false,
+  renderEnabled = true,
+  raceEpoch = 0,
+  hostRaceActive = true;
+const remoteInputs = new Map(),
+  remoteAt = new Map(),
+  remoteVehicles = new Map(),
+  peerSlots = new Map(),
+  snapshotBuffer = new SnapshotBuffer();
+let snapshotTargets = null;
+let lastStroke = [false, false],
+  lastBounce = 0;
+function choose(i) {
+  selected = i;
+  if (car) disposeVehicle(car);
+  car = createVehicle(THREE, i, true);
+  scene.add(car);
+  const display = roadAt(18);
+  car.position.set(display.x - 1, display.y + 0.42, display.z);
+  car.rotation.y = display.heading - Math.PI;
+  $("#vehicle-desc").textContent =
+    VEHICLES[i].name +
+    " — " +
+    VEHICLES[i].subtitle +
+    ". " +
+    (VEHICLES[i].trait || "");
+  $("#specs").innerHTML =
+    `<div><span>${VEHICLES[i].mass} kg</span>WEIGHT</div><div><span>${Math.round((VEHICLES[i].handling / 1.5) * 10)}/10</span>HANDLING</div><div><span>${VEHICLES[i].grip.toFixed(2)}</span>GRIP</div>`;
+  $("#choices").innerHTML = VEHICLES.map(
+    (v, j) =>
+      `<button class="${i === j ? "selected" : ""}" data-car="${j}">${thumbnails[j] ? '<img src="' + thumbnails[j] + '" alt="" />' : ""}${v.name}</button>`,
+  ).join("");
+  document
+    .querySelectorAll("[data-car]")
+    .forEach((b) => (b.onclick = () => choose(+b.dataset.car)));
+}
+choose(0);
+function garage() {
+  if (net.role === "host" && raceEpoch) net.broadcastRace?.(raceEpoch, 0);
+  running = false;
+  audio.suspendRace?.();
+  if (!thumbnails.length)
+    thumbnails = createVehicleThumbnails(THREE, renderer, createVehicle);
+  $("#home").classList.add("hidden");
+  $("#garage").classList.remove("hidden");
+  $("#pause").classList.add("hidden");
+  $("#finish").classList.add("hidden");
+  choose(selected);
+}
+function start(skipGuide = false) {
+  if (net.role === "guest" && skipGuide !== true) {
+    showModal($("#lobby"));
+    status("The host starts the family race. Leave the room to race solo.");
+    return;
+  }
+  if (
+    skipGuide !== true &&
+    navigator.maxTouchPoints > 0 &&
+    !localStorage.getItem("derby-controls-seen")
+  ) {
+    showModal($("#drive-guide"));
+    return;
+  }
+  raceCompleted = false;
+  snapshotBuffer.clear();
+  snapshotTargets = null;
+  racers.forEach(disposeRacer);
+  racers = Array.from({ length: 6 }, (_, i) =>
+    createRacer(
+      VEHICLES[
+        i === 0 ? selected : (remoteVehicles.get(i) ?? (i + selected) % 10)
+      ],
+      i,
+    ),
+  );
+  racers.forEach((r, i) => {
+    r.s = 5 + i * 6;
+    r.lateral = ((i % 3) - 1) * 2;
+    stepRacer(r, {}, 0.001, roadAt, surfaceAt);
+  });
+  opponents.forEach(disposeVehicle);
+  opponents = racers.slice(1).map((r, i) => {
+    const g = createVehicle(
+      THREE,
+      remoteVehicles.get(i + 1) ?? (i + 1 + selected) % 10,
+    );
+    scene.add(g);
+    return g;
+  });
+  startDelay = 3;
+  running = true;
+  if (net.role === "host") {
+    raceEpoch = Math.max(Date.now(), raceEpoch + 1);
+    net.broadcastRace?.(raceEpoch, 1);
+  }
+  $("#home").classList.add("hidden");
+  $("#garage").classList.add("hidden");
+  $("#lobby").classList.add("hidden");
+  $("#pause").classList.remove("hidden");
+  audio.start().then(() => audio.startRace?.());
+  try {
+    screen.orientation?.lock?.("landscape").catch(() => {});
+  } catch {}
+}
+$("#garage-btn").onclick = garage;
+$("#back").onclick = () => {
+  $("#garage").classList.add("hidden");
+  $("#home").classList.remove("hidden");
+};
+$("#start").onclick = start;
+$("#pause").onclick = garage;
+$("#again").onclick = garage;
+$("#gyro").onclick = async () => {
+  $("#gyro").textContent = (await controls.enableGyro())
+    ? "Tilt steering enabled"
+    : "Tilt unavailable — use touch / keys";
+};
+$("#family-btn").onclick = () => showModal($("#lobby"));
+$("#close-lobby").onclick = () => {
+  hideModal($("#lobby"));
+  stopScan();
+};
+async function displayCode(code) {
+  $("#qr-placeholder").classList.add("hidden");
+  $("#qr").classList.remove("hidden");
+  $("#code").value = code;
+  await QRCode.toCanvas($("#qr"), code, {
+    width: 320,
+    margin: 2,
+    errorCorrectionLevel: "L",
+  });
+}
+const guide = document.createElement("section");
+guide.id = "drive-guide";
+guide.className = "modal hidden";
+guide.innerHTML =
+  '<div class="eyebrow">Before the starting bell</div><h2>Both hands on the wheel.</h2><p>Hold your device in landscape, centered and comfortable. Enable tilt, then turn it like a steering wheel. Swipe upward with each thumb to push the paddles. Hold the bottom-left for the brake. Tap the bottom-right for the lamp, or hold it to shift between forward and reverse.</p><div class="actions"><button id="guide-tilt">Enable tilt while centered</button><button class="primary" id="hands-ready">Hands ready — roll out</button></div>';
+document.body.append(guide);
+$("#guide-tilt").onclick = async () => {
+  $("#guide-tilt").textContent = (await controls.enableGyro())
+    ? "Centered — tilt to steer"
+    : "Tilt unavailable — swipe sideways to steer";
+};
+$("#hands-ready").onclick = () => {
+  localStorage.setItem("derby-controls-seen", "1");
+  hideModal(guide);
+  start(true);
+};
+const status = (t) => ($("#network-status").textContent = t);
+prepareDialog(guide);
+const leaveButton = document.createElement("button");
+leaveButton.id = "leave-room";
+leaveButton.textContent = "Leave family room";
+$("#close-lobby").after(leaveButton);
+leaveButton.onclick = () => {
+  net.close();
+  peerSlots.clear();
+  remoteInputs.clear();
+  remoteAt.clear();
+  remoteVehicles.clear();
+  snapshotBuffer.clear();
+  snapshotTargets = null;
+  raceEpoch = 0;
+  hostRaceActive = true;
+  raceCompleted = false;
+  stopScan();
+  hideModal($("#lobby"));
+  garage();
+  status("You left the room. Host or scan an invitation to reconnect.");
+};
+net.onStatus = (s, id) => {
+  if (s === "connected" && net.role === "host" && !peerSlots.has(id)) {
+    const slot = [1, 2, 3, 4, 5].find(
+      (n) => ![...peerSlots.values()].includes(n),
+    );
+    if (slot) {
+      peerSlots.set(id, slot);
+      net.sendSlot?.(id, slot);
+    }
+  }
+  if (s === "connected" && net.role === "guest") net.sendVehicle?.(selected);
+  if (["disconnected", "failed", "closed"].includes(s)) {
+    const slot = peerSlots.get(id);
+    remoteInputs.delete(slot);
+    remoteAt.delete(slot);
+    if (!net.peers.has(id)) {
+      peerSlots.delete(id);
+      remoteVehicles.delete(slot);
+    }
+    if (
+      net.role === "guest" &&
+      net.connectedCount === 0 &&
+      !net.peers.has(id)
+    ) {
+      hostRaceActive = false;
+      raceCompleted = false;
+      garage();
+      status(
+        "Host disconnected. Scan a fresh invitation or leave the family room.",
+      );
+      return;
+    }
+  }
+  status(`${s} · ${net.connectedCount + 1} / 6 drivers`);
+};
+net.onVehicle = (index, id) => {
+  const slot = peerSlots.get(id);
+  if (!slot || remoteVehicles.get(slot) === index) return;
+  remoteVehicles.set(slot, index);
+  if (racers[slot]) {
+    racers[slot].stats = VEHICLES[index];
+    disposeRacer(racers[slot]);
+  }
+  if (opponents[slot - 1]) {
+    disposeVehicle(opponents[slot - 1]);
+    opponents[slot - 1] = createVehicle(THREE, index);
+    scene.add(opponents[slot - 1]);
+  }
+};
+net.onRoster = (indices) => {
+  indices.forEach((vehicle, slot) => remoteVehicles.set(slot, vehicle));
+  if (net.role === "guest") {
+    const slots = [0, 1, 2, 3, 4, 5].filter((slot) => slot !== guestIndex);
+    slots.forEach((slot, i) => {
+      if (opponents[i]?.userData.vehicleIndex === indices[slot]) return;
+      if (opponents[i]) disposeVehicle(opponents[i]);
+      const model = createVehicle(THREE, indices[slot]);
+      model.userData.vehicleIndex = indices[slot];
+      opponents[i] = model;
+      scene.add(model);
+    });
+  }
+};
+net.onRace = (epoch, active) => {
+  const changed = epoch !== raceEpoch;
+  raceEpoch = epoch;
+  hostRaceActive = active;
+  if (!active) {
+    const wasRacing = running || raceCompleted;
+    raceCompleted = false;
+    if (wasRacing) garage();
+    status("The host is in the garage. Waiting for the next starting bell.");
+  } else if (changed || (!running && !raceCompleted)) start(true);
+};
+net.onResults = (times) => {
+  times.forEach((time, i) => {
+    if (racers[i] && time >= 0) {
+      racers[i].finishTime = time;
+      racers[i].finished = true;
+    }
+  });
+  if (raceCompleted) renderResults();
+};
+net.onInput = (arr, id) => {
+  const slot = peerSlots.get(id);
+  if (slot && arr.length >= 6) {
+    remoteAt.set(slot, performance.now() / 1000);
+    remoteInputs.set(slot, {
+      steer: Math.max(-1, Math.min(1, arr[0])),
+      leftPaddle: !!arr[1],
+      rightPaddle: !!arr[2],
+      brake: !!arr[3],
+      headlight: !!arr[4],
+      reverse: !!arr[5],
+    });
+  }
+};
+net.onSnapshot = (arr) => {
+  if (arr[0] === 77) {
+    guestIndex = arr[1];
+    return;
+  }
+  if (arr[0] === 88) {
+    if (!hostRaceActive) return;
+    if (!running && !raceCompleted) start(true);
+    snapshotTargets = arr.slice(1);
+    snapshotBuffer.push(
+      Array.from({ length: 6 }, (_, i) =>
+        snapshotTargets.slice(i * 4, i * 4 + 4),
+      ),
+      performance.now() / 1000,
+    );
+  }
+};
+$("#host").onclick = async () => {
+  try {
+    status("Gathering local connection candidates…");
+    await displayCode(await net.hostOffer());
+    status("Guest: scan this offer, then show your answer QR.");
+  } catch (e) {
+    status(e.message);
+  }
+};
+async function useCode(code) {
+  try {
+    if (net.role === "host") {
+      await net.acceptAnswer(code);
+      status("Answer accepted. Connecting…");
+    } else {
+      await displayCode(await net.joinOffer(code));
+      status("Show this answer QR to the host.");
+    }
+  } catch (e) {
+    status(e.message);
+  }
+}
+$("#accept").onclick = () => useCode($("#code").value.trim());
+$("#copy").onclick = () =>
+  navigator.clipboard
+    .writeText($("#code").value)
+    .catch(() => status("Select and copy the code manually."));
+let stream,
+  scanning = false;
+function stopScan() {
+  scanning = false;
+  stream?.getTracks().forEach((t) => t.stop());
+  $("#scanner").classList.add("hidden");
+}
+$("#scan").onclick = async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+    });
+    const v = $("#scanner");
+    v.srcObject = stream;
+    v.classList.remove("hidden");
+    await v.play();
+    scanning = true;
+    const scratch = document.createElement("canvas"),
+      ctx = scratch.getContext("2d", { willReadFrequently: true });
+    function scan() {
+      if (!scanning) return;
+      if (v.videoWidth) {
+        scratch.width = v.videoWidth;
+        scratch.height = v.videoHeight;
+        ctx.drawImage(v, 0, 0);
+        const data = ctx.getImageData(0, 0, scratch.width, scratch.height),
+          qr = jsQR(data.data, data.width, data.height);
+        if (qr) {
+          stopScan();
+          useCode(qr.data);
+          return;
+        }
+      }
+      requestAnimationFrame(scan);
+    }
+    scan();
+  } catch (e) {
+    status("Camera unavailable: " + e.message);
+  }
+};
+$("#family-pass").onclick = async () => {
+  try {
+    const pass = await createFamilyPass(6);
+    await persistFamilyPass(pass, [
+      "Driver 1",
+      "Driver 2",
+      "Driver 3",
+      "Driver 4",
+      "Driver 5",
+      "Driver 6",
+    ]);
+    const claims = await verifyFamilyPass(pass);
+    $("#pass-status").textContent = claims
+      ? "Signed demo family pass saved offline: 6 seats. Purchase verification requires a trusted issuer."
+      : "Pass verification failed.";
+  } catch (e) {
+    $("#pass-status").textContent = e.message;
+  }
+};
+loadFamilyPass()
+  .then((saved) => {
+    if (saved)
+      $("#pass-status").textContent =
+        `Signed demo family pass loaded offline: ${saved.profiles.length} profiles. Purchase verification requires a trusted issuer.`;
+  })
+  .catch(() => {});
+$("#race-room").onclick = () => {
+  if (net.role === "guest") {
+    status("Waiting for the host to start.");
+    return;
+  }
+  start();
+  for (const [id, p] of net.peers) {
+    if (p.channel?.readyState === "open")
+      p.channel.send(JSON.stringify([77, peerSlots.get(id)]));
+  }
+};
+function resize() {
+  $("#portrait").style.display =
+    navigator.maxTouchPoints > 0 && innerHeight > innerWidth ? "flex" : "none";
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+resize();
+function place(mesh, r) {
+  mesh.position.set(r.position.x, r.position.y, r.position.z);
+  mesh.quaternion.set(
+    r.quaternion.x,
+    r.quaternion.y,
+    r.quaternion.z,
+    r.quaternion.w,
+  );
+}
+function renderResults() {
+  const r = racers[net.role === "guest" ? guestIndex : 0];
+  if (!r) return;
+  $("#results").textContent =
+    r.finishTime == null
+      ? `Your ${VEHICLES[selected].name} completed the two-mile descent.`
+      : `Your ${VEHICLES[selected].name} completed the two-mile descent in ${Math.floor(r.finishTime / 60)}m ${Math.floor(r.finishTime % 60)}s.`;
+  const board = document.createElement("ol");
+  [...racers]
+    .sort(
+      (a, b) =>
+        (a.finishTime ?? Infinity) - (b.finishTime ?? Infinity) || b.s - a.s,
+    )
+    .forEach((entry) => {
+      const li = document.createElement("li");
+      li.textContent =
+        (entry.index === (net.role === "guest" ? guestIndex : 0)
+          ? "You"
+          : peerSlots.size && remoteInputs.has(entry.index)
+            ? "Family driver " + entry.index
+            : AI_DRIVERS[Math.max(0, entry.index - 1)].name) +
+        " — " +
+        (entry.finished
+          ? Math.floor((entry.finishTime ?? entry.elapsed) / 60) +
+            "m " +
+            Math.floor((entry.finishTime ?? entry.elapsed) % 60) +
+            "s"
+          : "still on the road");
+      board.append(li);
+    });
+  $("#results").append(board);
+}
+function animate(now) {
+  requestAnimationFrame(animate);
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  clockTime += dt;
+  const input = controls.update(dt);
+  if (running) {
+    const local = net.role === "guest" ? guestIndex : 0;
+    startDelay = Math.max(0, startDelay - dt);
+    if (net.role !== "guest" && startDelay === 0) {
+      racers.forEach((r, i) =>
+        stepRacer(
+          r,
+          i === 0
+            ? input
+            : (now / 1000 - (remoteAt.get(i) ?? -100) < 1
+                ? remoteInputs.get(i)
+                : null) ||
+                aiInput(
+                  AI_DRIVERS[i - 1],
+                  r,
+                  racers,
+                  clockTime,
+                  roadAt,
+                  surfaceAt,
+                ),
+          dt,
+          roadAt,
+          surfaceAt,
+        ),
+      );
+      resolveRacerContacts(racers, dt);
+    } else if (snapshotTargets) {
+      racers.forEach((r, i) => {
+        const a =
+          snapshotBuffer.sample(now / 1000)?.[i] ||
+          snapshotTargets.slice(i * 4, i * 4 + 4);
+        if (a.length === 4) {
+          r.elapsed += dt;
+          r.s = a[0];
+          r.lateral = a[1];
+          r.speed = a[2];
+          r.steer = a[3];
+          r.finished = r.s >= 3218;
+          const p = roadAt(r.s);
+          const derivative =
+              Math.cos(r.s * 0.004) * 0.14 + Math.cos(r.s * 0.011) * 0.088,
+            norm = Math.hypot(1, derivative);
+          r.position = {
+            x: p.x + r.lateral / norm,
+            y: p.y + 0.42,
+            z: p.z + (derivative * r.lateral) / norm,
+          };
+          const yaw = p.heading - Math.PI;
+          r.quaternion = {
+            x: 0,
+            y: Math.sin(yaw / 2),
+            z: 0,
+            w: Math.cos(yaw / 2),
+          };
+        }
+      });
+    }
+    const r = racers[local];
+    place(car, r);
+    racers
+      .filter((_, i) => i !== local)
+      .forEach((r, i) => place(opponents[i], r));
+    camera.position.copy(car.localToWorld(new THREE.Vector3(0, 1.78, 0.28)));
+    const target = car.localToWorld(
+      new THREE.Vector3(input.steer * 0.3, 1.45, -25),
+    );
+    camera.lookAt(target);
+    const strokes = [input.leftPaddle, input.rightPaddle];
+    strokes.forEach((on, i) => {
+      if (on && !lastStroke[i]) audio.stroke?.(i ? 1 : -1);
+    });
+    lastStroke = strokes;
+    if (Math.abs(r.bounce - lastBounce) > 0.04)
+      audio.impact?.(
+        surfaceAt(r.s, r.lateral).type,
+        Math.min(1, Math.abs(r.bounce - lastBounce) * 5),
+      );
+    lastBounce = r.bounce;
+    const u = car.userData;
+    if (u.wheel) u.wheel.rotation.z = -input.steer * 0.7;
+    if (u.paddles)
+      u.paddles.forEach(
+        (p, i) =>
+          (p.rotation.x = (i ? input.rightPaddle : input.leftPaddle)
+            ? -0.35
+            : 0),
+      );
+    if (u.brake) u.brake.rotation.x = input.brake ? -0.5 : 0;
+    if (u.gear) u.gear.rotation.x = input.reverse ? 0.4 : 0;
+    if (u.headlight) u.headlight.visible = input.headlight;
+    graphics.update(clockTime, r.speed, car, surfaceAt(r.s, r.lateral));
+    audio.update(r.speed, surfaceAt(r.s, r.lateral).type, input.brake, dt);
+    slotClock += dt;
+    if (net.role === "guest" && slotClock > 1) {
+      slotClock = 0;
+      net.sendVehicle?.(selected);
+    }
+    if (net.role === "host" && slotClock > 1) {
+      slotClock = 0;
+      net.broadcastResults?.(racers.map((entry) => entry.finishTime ?? -1));
+      if (raceCompleted) renderResults();
+      net.broadcastRoster?.(
+        racers.map((r, i) =>
+          i === 0 ? selected : (remoteVehicles.get(i) ?? (i + selected) % 10),
+        ),
+      );
+      for (const [id, p] of net.peers)
+        if (p.channel?.readyState === "open")
+          p.channel.send(JSON.stringify([77, peerSlots.get(id)]));
+    }
+    networkClock += dt;
+    if (networkClock >= 1 / 60) {
+      networkClock = 0;
+      if (net.role === "guest")
+        net.sendInput([
+          input.steer,
+          +input.leftPaddle,
+          +input.rightPaddle,
+          +input.brake,
+          +input.headlight,
+          +input.reverse,
+        ]);
+      else if (net.role === "host")
+        net.broadcast([
+          88,
+          ...racers.flatMap((r) => [r.s, r.lateral, r.speed, r.steer]),
+        ]);
+    }
+    if (r.s >= 3218) {
+      r.finished = true;
+    }
+    if (r.finished && !raceCompleted) {
+      raceCompleted = true;
+      if (net.role !== "host") running = false;
+      showModal($("#finish"));
+      renderResults();
+      if (net.role === "host")
+        net.broadcastResults?.(racers.map((entry) => entry.finishTime ?? -1));
+    }
+  } else {
+    audio.update(0, "dirt", false, dt);
+    camera.position.set(11, 3, -9);
+    camera.lookAt(1, 0.3, -24);
+    graphics.update(clockTime, 0, car);
+  }
+  if (renderEnabled) renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+if (import.meta.env.PROD && "serviceWorker" in navigator)
+  navigator.serviceWorker
+    .register("/sw.js")
+    .then(async () => {
+      await navigator.serviceWorker.ready;
+      $("#offline-status").textContent =
+        "Offline cache installed. On iPad, add this app to your Home Screen before leaving Wi-Fi.";
+    })
+    .catch((e) => {
+      $("#offline-status").textContent =
+        "Offline cache unavailable: " + e.message;
+    });
+window.__derby = {
+  net,
+  controls,
+  get racers() {
+    return racers;
+  },
+  get peerSlots() {
+    return [...peerSlots];
+  },
+  get vehicles() {
+    return [...remoteVehicles];
+  },
+  get running() {
+    return running;
+  },
+  get renderEnabled() {
+    return renderEnabled;
+  },
+  set renderEnabled(value) {
+    renderEnabled = !!value;
+  },
+  start,
+  roadAt,
+  surfaceAt,
+};

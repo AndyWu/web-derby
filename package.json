@@ -1,0 +1,21 @@
+{
+  "name": "hollow-run-derby",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build && node scripts/cache.mjs",
+    "test": "node --test src/*.test.js"
+  },
+  "dependencies": {
+    "three": "^0.180.0",
+    "cannon-es": "^0.20.0",
+    "qrcode": "^1.5.4",
+    "jsqr": "^1.4.0",
+    "lz-string": "^1.5.0"
+  },
+  "devDependencies": {
+    "vite": "^6.1.0",
+    "@playwright/test": "^1.51.0"
+  }
+}

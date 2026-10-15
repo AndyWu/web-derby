@@ -1,0 +1,43 @@
+{
+  "errors": [],
+  "assets": [
+    {
+      "name": "derby-offline-5ce2e2ab86197be6bd86",
+      "url": "http://127.0.0.1:4173/",
+      "cached": true
+    },
+    {
+      "name": "derby-offline-5ce2e2ab86197be6bd86",
+      "url": "http://127.0.0.1:4173/index.html",
+      "cached": true
+    },
+    {
+      "name": "derby-offline-5ce2e2ab86197be6bd86",
+      "url": "http://127.0.0.1:4173/manifest.json",
+      "cached": true
+    },
+    {
+      "name": "derby-offline-5ce2e2ab86197be6bd86",
+      "url": "http://127.0.0.1:4173/icon.svg",
+      "cached": true
+    },
+    {
+      "name": "derby-offline-5ce2e2ab86197be6bd86",
+      "url": "http://127.0.0.1:4173/assets/index-D311kJWV.js",
+      "cached": true
+    },
+    {
+      "name": "derby-offline-5ce2e2ab86197be6bd86",
+      "url": "http://127.0.0.1:4173/assets/index-Dnmn9DVs.css",
+      "cached": true
+    },
+    {
+      "name": "derby-offline-5ce2e2ab86197be6bd86",
+      "url": "http://127.0.0.1:4173/cache-manifest.json",
+      "cached": true
+    }
+  ],
+  "offlineRoot": true,
+  "offlineIndex": true,
+  "hasCanvas": true
+}

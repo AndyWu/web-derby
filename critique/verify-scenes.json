@@ -1,0 +1,24 @@
+{
+  "mode": "scenes",
+  "url": "http://127.0.0.1:4173",
+  "screenshots": [
+    "round-10-mud.png",
+    "round-10-water.png",
+    "round-10-barn.png"
+  ],
+  "errors": [],
+  "checks": {
+    "mud": {
+      "s": 100,
+      "surface": "mud"
+    },
+    "water": {
+      "s": 235,
+      "surface": "water"
+    },
+    "barn": {
+      "s": 570,
+      "surface": "dirt"
+    }
+  }
+}
