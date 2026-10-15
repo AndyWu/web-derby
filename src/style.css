@@ -318,7 +318,7 @@ textarea:focus-visible {
   }
   #garage .actions {
     position: sticky;
-    bottom: 0;
+    top: 0;
     z-index: 4;
     background: #192b23f5;
     padding: 8px 0;
@@ -409,3 +409,6 @@ button:disabled {
 #dashboard-light:hover, #dashboard-light:active { background:transparent; }
 #dashboard-light:focus-visible { outline:2px solid #ffe6a3; outline-offset:3px; }
 @media(max-height:450px) { .swipe-zone { top:28%; bottom:17%; gap:4px; border-radius:22px; } .swipe-zone i { height:9px; } #race-rank { font-size:26px; padding:6px 12px; } }
+
+.family-top { position: sticky; top: 0; z-index: 5; background: #192b23; padding: 10px 0; }
+#race-countdown { position: fixed; top: 14%; left: 50%; transform: translateX(-50%); z-index: 15; color: #fff5d9; background: #192b23bb; border-radius: 12px; padding: 14px 28px; font: bold 32px Georgia, serif; pointer-events: none; }

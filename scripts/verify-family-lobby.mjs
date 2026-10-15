@@ -18,6 +18,9 @@ try {
    await page.evaluate(()=>window.__derby.renderEnabled=false);
    await page.locator('#family-btn').click();
    assert.equal(await page.locator('#race-room').isDisabled(),true);
+   await page.locator('#lobby-garage').click();
+   await page.locator('[data-car=\"7\"]').click();
+   await page.locator('#back').click();
    await page.locator('#lobby-tilt').click();
    assert.equal(await page.evaluate(()=>window.motionRequests),2);
    await page.evaluate(()=>{const e=new Event('deviceorientation');e.beta=60;e.gamma=0;window.dispatchEvent(e);});
@@ -38,5 +41,13 @@ try {
  await host.locator('#race-room').click();
  await guest.waitForFunction(()=>document.querySelector('#lobby').classList.contains('hidden'));
  assert.equal(await guest.evaluate(()=>window.__derby.racers.length),10);
+ await host.waitForFunction(()=>window.__derby.startDelay>8);
+ const before=await host.evaluate(()=>window.__derby.racers.map(r=>r.s));
+ await host.waitForTimeout(1500);
+ assert.deepEqual(await host.evaluate(()=>window.__derby.racers.map(r=>r.s)),before);
+ assert.ok(await guest.locator('#race-countdown').isVisible());
+ await host.waitForFunction(()=>window.__derby.startDelay===0,{},{timeout:15000});
+ await host.waitForFunction(before=>window.__derby.racers[0].s>before[0]+.1,before);
+
  console.log('PASS: family tilt activation, solo-start guard, two-way connection, host starts both ten-car races.');
 } finally {await browser.close();}

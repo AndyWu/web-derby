@@ -117,7 +117,7 @@ export class FamilyNetwork {
       if (this.role === "guest" && Number.isInteger(this.vehicleIndex))
         this.sendVehicle(this.vehicleIndex);
       if (this.role === "host" && this.raceState)
-        this._sendControl(peer, this.raceState);
+        this._sendControl(peer, this.currentRaceState());
     };
     channel.onclose = () => {
       this._remove(peer);
@@ -160,13 +160,14 @@ export class FamilyNetwork {
           else if (
             this.role === "guest" &&
             Array.isArray(data) &&
-            data.length === 3 &&
+            (data.length === 3 || data.length === 4) &&
+            (data.length === 3 || (Number.isFinite(data[3]) && data[3] >= 0 && data[3] <= 10000)) &&
             data[0] === 82 &&
             Number.isSafeInteger(data[1]) &&
             data[1] > 0 &&
             (data[2] === 0 || data[2] === 1)
           )
-            this.onRace(data[1], data[2]);
+            this.onRace(data[1], data[2], data[3] ?? 0);
           else if (
             this.role === "guest" &&
             Array.isArray(data) &&
@@ -334,7 +335,10 @@ export class FamilyNetwork {
     )
       peer.channel.send(JSON.stringify(message));
   }
-  broadcastRace(epoch, active) {
+  currentRaceState() {
+    return [...this.raceState, Math.max(0, (this.raceDeadline ?? 0) - performance.now())];
+  }
+  broadcastRace(epoch, active, countdownMs = 0) {
     if (
       !Number.isSafeInteger(epoch) ||
       epoch <= 0 ||
@@ -345,11 +349,12 @@ export class FamilyNetwork {
       );
     if (this.role !== "host") return;
     this.raceState = [82, epoch, active];
+    this.raceDeadline = performance.now() + Math.max(0, Math.min(10000, countdownMs));
     clearInterval(this.raceTimer);
     const send = () => {
       if (this.role === "host")
         for (const peer of this.peers.values())
-          this._sendControl(peer, this.raceState);
+          this._sendControl(peer, this.currentRaceState());
     };
     send();
     this.raceTimer = setInterval(send, 1000);

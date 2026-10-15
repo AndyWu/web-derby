@@ -30,7 +30,7 @@ import { addDashboardSwitch, updateDashboardSwitch } from "./dashboard-switch.js
 document.querySelector("#app").innerHTML = `<canvas class="game"></canvas>
 <section class="screen" id="home"><div class="content"><div class="eyebrow">The countryside is calling · Est. 1975</div><div class="rule"></div><h1>Hollow<br><i>Run.</i></h1><p>Ten drivers. Two miles. Nothing but gravity.<br>A homemade soapbox derby down the old farm road.</p><div class="actions"><button class="primary" id="garage-btn">Take the wheel ↗</button><button id="family-btn">Family race</button></div><div class="help">BUILT BY HAND. DRIVEN BY FEEL.</div></div><div class="top-mark">SOAPBOX DERBY / 01</div><div class="footer">3218 METRES OF DIRT &nbsp; / &nbsp; ONE WAY DOWN</div></section>
 <section class="screen hidden" id="garage"><div class="garage"><div class="eyebrow">The backyard garage</div><h2>Pick your pride & joy.</h2><p id="vehicle-desc"></p><div class="choices" id="choices"></div><div class="specs" id="specs"></div><div class="actions"><button class="primary" id="start">Roll downhill ↗</button><button id="gyro">Enable tilt steering</button><button id="back">Back</button></div><p class="help">DESKTOP: A / D steer · alternate W / S to paddle · SPACE brake · L light · R toggle gear<br>TOUCH: swipe DOWN at either edge to go · swipe UP to slow / reverse · rest BOTH thumbs to brake · dashboard switch for light. One forward swipe lasts 10 seconds. Tilt to steer.</p></div></section>
-<div id="race-controls" class="hidden">
+<div id="race-countdown" class="hidden" role="status" aria-live="polite"></div><div id="race-controls" class="hidden">
 <div id="race-rank" aria-label="Race position">10<span>/10</span></div>
 <div class="swipe-zone swipe-left" data-side="left" aria-label="Left thumb swipe area"><span class="swipe-arrow">↑</span><span>SLOW / REVERSE</span><i></i><strong>SWIPE</strong><span>FORWARD</span><span class="swipe-arrow">↓</span></div>
 <div class="swipe-zone swipe-right" data-side="right" aria-label="Right thumb swipe area"><span class="swipe-arrow">↑</span><span>SLOW / REVERSE</span><i></i><strong>SWIPE</strong><span>FORWARD</span><span class="swipe-arrow">↓</span></div>
@@ -38,7 +38,7 @@ document.querySelector("#app").innerHTML = `<canvas class="game"></canvas>
 <button id="dashboard-light" aria-label="Toggle physical dashboard headlight switch" aria-pressed="false" title="Headlight switch (L)"></button>
 </div>
 <button class="race-menu hidden" id="pause">Garage ↗</button>
-<section id="lobby" class="modal hidden"><div class="eyebrow">Offline family race · six family seats · ten cars</div><h2>Meet at the starting line.</h2><p>Race with ten cars, with bots filling every open place. Install once while online. Then connect every device to the same Wi-Fi or a supported Personal Hotspot. No signaling server is used. Hotspot support and local peer connections depend on your devices and network.</p><div class="actions"><button id="lobby-tilt">Enable iOS tilt steering</button><button id="host">Host family race</button><button id="scan">Scan connection QR</button><button id="close-lobby">Close</button></div><p id="family-connections" role="status" aria-live="polite"></p><div class="qr-row"><div class="qr-placeholder" id="qr-placeholder">Your connection QR will appear here.<br>Host a race or scan an invitation.</div><canvas id="qr" class="hidden"></canvas><div><p id="network-status">Host displays an offer. Guest scans it and shows an answer. Host scans the answer. Repeat for each guest.</p><video id="scanner" playsinline muted class="hidden"></video></div></div><textarea id="code" placeholder="Connection code — copy/paste fallback" aria-label="Connection code"></textarea><div class="actions"><button id="accept">Use connection code</button><button id="copy">Copy code</button><button id="family-pass">Create demo family pass</button><button id="race-room">Start family race</button></div><p id="offline-status" class="help">Offline cache is preparing. Keep this page open while online.</p><p id="pass-status" class="help">Family pass is a signed six-seat local demo. It does not verify a purchase.</p></section>
+<section id="lobby" class="modal hidden"><div class="actions family-top"><button id="lobby-garage">Garage · choose car</button><button id="lobby-tilt">Enable tilt steering</button></div><div class="eyebrow">Offline family race · six family seats · ten cars</div><h2>Meet at the starting line.</h2><p>Race with ten cars, with bots filling every open place. Install once while online. Then connect every device to the same Wi-Fi or a supported Personal Hotspot. No signaling server is used. Hotspot support and local peer connections depend on your devices and network.</p><div class="actions"><button id="host">Host family race</button><button id="scan">Scan connection QR</button><button id="close-lobby">Close</button></div><p id="family-connections" role="status" aria-live="polite"></p><div class="qr-row"><div class="qr-placeholder" id="qr-placeholder">Your connection QR will appear here.<br>Host a race or scan an invitation.</div><canvas id="qr" class="hidden"></canvas><div><p id="network-status">Host displays an offer. Guest scans it and shows an answer. Host scans the answer. Repeat for each guest.</p><video id="scanner" playsinline muted class="hidden"></video></div></div><textarea id="code" placeholder="Connection code — copy/paste fallback" aria-label="Connection code"></textarea><div class="actions"><button id="accept">Use connection code</button><button id="copy">Copy code</button><button id="family-pass">Create demo family pass</button><button id="race-room">Start family race</button></div><p id="offline-status" class="help">Offline cache is preparing. Keep this page open while online.</p><p id="pass-status" class="help">Family pass is a signed six-seat local demo. It does not verify a purchase.</p></section>
 <section id="finish" class="modal hidden"><div class="eyebrow">The old farm finish line</div><h2>You made it down.</h2><p id="results"></p><button id="again">Back to the garage</button></section><div id="portrait"><div><h2>Turn toward the road.</h2><p>Hold your device in landscape with both hands.</p></div></div>`;
 const $ = (s) => document.querySelector(s),
   canvas = $("canvas.game");
@@ -123,6 +123,7 @@ let selected = 0,
   guestIndex = 1,
   slotClock = 0,
   startDelay = 0,
+  startDeadline = 0,
   thumbnails = [],
   raceCompleted = false,
   renderEnabled = true,
@@ -138,6 +139,7 @@ let lastStroke = [false, false],
   lastBounce = 0;
 function choose(i) {
   selected = i;
+  if (net.role === "guest") net.sendVehicle?.(i);
   if (car) disposeVehicle(car);
   car = createVehicle(THREE, i, true);
   addDashboardSwitch(THREE, car);
@@ -216,11 +218,12 @@ function start(skipGuide = false) {
     scene.add(g);
     return g;
   });
-  startDelay = 3;
+  startDelay = net.role === "host" ? 10 : 3;
+  startDeadline = performance.now() + startDelay * 1000;
   running = true;
   if (net.role === "host") {
     raceEpoch = Math.max(Date.now(), raceEpoch + 1);
-    net.broadcastRace?.(raceEpoch, 1);
+    net.broadcastRace?.(raceEpoch, 1, 10000);
   }
   $("#home").classList.add("hidden");
   $("#garage").classList.add("hidden");
@@ -231,10 +234,15 @@ function start(skipGuide = false) {
     screen.orientation?.lock?.("landscape").catch(() => {});
   } catch {}
 }
-$("#garage-btn").onclick = garage;
+$("#garage-btn").onclick = () => { familyGarage = false; $("#back").textContent = "Back"; garage(); };
+let familyGarage = false;
 $("#back").onclick = () => {
   $("#garage").classList.add("hidden");
-  $("#home").classList.remove("hidden");
+  if (familyGarage || net.role === "host" || net.role === "guest") {
+    familyGarage = false;
+    refreshFamilyLobby();
+    showModal($("#lobby"));
+  } else $("#home").classList.remove("hidden");
 };
 $("#start").onclick = start;
 $("#pause").onclick = garage;
@@ -302,6 +310,16 @@ function requestTilt() {
 }
 $("#gyro").onclick = requestTilt;
 $("#lobby-tilt").onclick = requestTilt;
+$("#lobby-garage").onclick = () => {
+  hideModal($("#lobby"));
+  stopScan();
+  garage();
+  $("#back").textContent = "Back to family race";
+  familyGarage = true;
+
+};
+const garageActions = $("#garage .actions");
+$("#garage .garage").prepend(garageActions);
 $("#family-btn").onclick = () => {
   refreshFamilyLobby();
   refreshTiltUI();
@@ -439,7 +457,7 @@ net.onRoster = (indices) => {
     });
   }
 };
-net.onRace = (epoch, active) => {
+net.onRace = (epoch, active, remainingMs = 0) => {
   const changed = epoch !== raceEpoch;
   raceEpoch = epoch;
   hostRaceActive = active;
@@ -448,7 +466,10 @@ net.onRace = (epoch, active) => {
     raceCompleted = false;
     if (wasRacing) garage();
     status("The host is in the garage. Waiting for the next starting bell.");
-  } else if (changed || (!running && !raceCompleted)) start(true);
+  } else {
+    if (changed || (!running && !raceCompleted)) start(true);
+    if (running) startDeadline = performance.now() + remainingMs;
+  }
 };
 net.onResults = (times) => {
   times.forEach((time, i) => {
@@ -685,9 +706,15 @@ function animate(now) {
   for (const zone of document.querySelectorAll(".swipe-zone")) {
     zone.classList.toggle("touching", [...controls.pointers.values()].some(p => p.side === (zone.dataset.side === "left" ? "leftPaddle" : "rightPaddle")));
   }
+  const countdown = running && startDeadline > performance.now();
+  $("#race-countdown").classList.toggle("hidden", !countdown);
+  if (countdown) {
+    const text = `Ready… ${Math.ceil((startDeadline - performance.now()) / 1000)}`;
+    if ($("#race-countdown").textContent !== text) $("#race-countdown").textContent = text;
+  }
   if (running) {
     const local = net.role === "guest" ? guestIndex : 0;
-    startDelay = Math.max(0, startDelay - dt);
+    startDelay = Math.max(0, (startDeadline - performance.now()) / 1000);
     if (net.role !== "guest" && startDelay === 0) {
       racers.forEach((r, i) =>
         stepRacer(
@@ -870,6 +897,7 @@ window.__derby = {
   get vehicles() {
     return [...remoteVehicles];
   },
+  get startDelay() { return startDelay; },
   get running() {
     return running;
   },
