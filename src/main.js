@@ -323,7 +323,7 @@ guide.innerHTML =
   '<div class="eyebrow">Before the starting bell</div><h2>Both hands on the wheel.</h2><p>Hold your device in landscape, centered and comfortable. Enable tilt, then turn it like a steering wheel. Swipe DOWN in either translucent edge zone for a 10-second forward push. A faster swipe accelerates harder and reaches a higher speed. Swipe UP to slow down, then gently reverse. Rest both thumbs still in the zones to hold the handbrake; release a thumb to roll. After a push runs out, the car settles into a slow downhill coast. Use the dashboard LAMP switch for the headlight.</p><div class="actions"><button id="guide-tilt">Enable tilt while centered</button><button class="primary" id="hands-ready">Hands ready — roll out</button></div>';
 document.body.append(guide);
 const tiltPanel = () =>
-  `<div class="tilt-feedback hidden"><svg class="tilt-dial" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26"/><circle cx="32" cy="32" r="6"/><path d="M8 22 27 30M56 22 37 30M32 38v20"/></svg><div><strong class="tilt-feedback-title" role="status" aria-live="polite"></strong><p class="tilt-feedback-copy"></p><button class="tilt-recenter hidden" type="button">Recenter wheel</button><a class="tilt-safari-link hidden" href="https://hollow-run-soapbox-derby.andycswu.chatgpt.site/" target="_blank" rel="noopener">Game link to open in Safari ↗</a></div></div>`;
+  `<div class="tilt-feedback hidden"><svg class="tilt-dial" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26"/><circle cx="32" cy="32" r="6"/><path d="M8 22 27 30M56 22 37 30M32 38v20"/></svg><div><strong class="tilt-feedback-title" role="status" aria-live="polite"></strong><p class="tilt-feedback-copy"></p><button class="tilt-recenter hidden" type="button">Recenter wheel</button><a class="tilt-safari-link hidden" href="${new URL(import.meta.env.BASE_URL, location.href).href}" target="_blank" rel="noopener">Game link to open in Safari ↗</a></div></div>`;
 $("#garage .actions").insertAdjacentHTML("afterend", tiltPanel());
 $("#drive-guide .actions").insertAdjacentHTML("afterend", tiltPanel());
 document
@@ -822,7 +822,7 @@ function animate(now) {
 requestAnimationFrame(animate);
 if (import.meta.env.PROD && "serviceWorker" in navigator)
   navigator.serviceWorker
-    .register("/sw.js")
+    .register(`${import.meta.env.BASE_URL}sw.js`)
     .then(async () => {
       await navigator.serviceWorker.ready;
       $("#offline-status").textContent =

@@ -39,3 +39,7 @@ Downward swipe velocity controls acceleration and the speed of the ten-second pu
 ### Ten-car races
 
 Each race has ten cars: one player plus nine bots in solo play, or up to six family players with bots filling the remaining places. Nine named AI drivers span poor to expert ability, with differing anticipation, steering accuracy, hazard decisions, and paddle pace. The garage contains twelve selectable models, including five photo-inspired additions; the opening page is dated Est. 1975.
+
+### GitHub Pages
+
+Play at https://andywu.github.io/web-derby/ after the Pages workflow succeeds. Pushes to `main` run the tests, build the game, and deploy `dist` using GitHub Actions. The build reads `DERBY_BASE` to support repository subpaths; the default `/` continues to support the existing Sites deployment. The PWA manifest, icons, service worker and offline asset URLs are scoped to their hosting path. Open the game once online before playing offline. Tilt still requires an iOS permission tap and supported motion sensors.

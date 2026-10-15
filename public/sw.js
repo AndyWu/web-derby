@@ -1,6 +1,6 @@
 /* The production build stamps this worker and writes an immutable asset manifest. */
 const BUILD_VERSION = "__DERBY_BUILD_VERSION__";
-const CACHE_PREFIX = "derby-offline-";
+const CACHE_PREFIX = "derby-offline-" + encodeURIComponent(new URL(self.registration.scope).pathname) + "-";
 const CACHE_NAME = CACHE_PREFIX + BUILD_VERSION;
 const baseURL = self.registration.scope;
 const absolute = path => new URL(path, baseURL).href;
@@ -11,7 +11,7 @@ self.addEventListener("install", event => {
     const manifest = await response.json();
     if (manifest.version !== BUILD_VERSION || !Array.isArray(manifest.assets)) throw new Error("Offline build version mismatch");
     const urls = manifest.assets.map(absolute);
-    if (urls.some(url => new URL(url).origin !== self.location.origin)) throw new Error("Offline assets must be same-origin");
+    if (urls.some(url => new URL(url).origin !== self.location.origin || !new URL(url).pathname.startsWith(new URL(baseURL).pathname))) throw new Error("Offline assets must be same-origin");
     const cache = await caches.open(CACHE_NAME);
     try {
       // addAll commits the complete shell together; reload avoids stale HTTP-cache HTML.
@@ -28,7 +28,7 @@ self.addEventListener("activate", event => {
   })());
 });
 self.addEventListener("fetch", event => {
-  if (event.request.method !== "GET" || new URL(event.request.url).origin !== self.location.origin) return;
+  if (event.request.method !== "GET" || new URL(event.request.url).origin !== self.location.origin || !new URL(event.request.url).pathname.startsWith(new URL(baseURL).pathname)) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     // Only this build’s public static files are present. Preview servers add Vary:
