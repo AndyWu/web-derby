@@ -103,6 +103,30 @@ export class DerbyAudio {
     this.strike(880, t + 0.58, 0.43, 0.25);
   }
 
+  async honk() {
+    await this.start();
+    const c = this.context;
+    if (!c || this.disposed || c.state !== "running") return;
+    const t=c.currentTime;
+    if (t < (this.hornUntil ?? 0)) return;
+    this.hornUntil=t+.3;
+    const gain=c.createGain(), filter=c.createBiquadFilter();
+    filter.type="lowpass";filter.frequency.value=1800;
+    gain.gain.setValueAtTime(.0001,t);
+    gain.gain.exponentialRampToValueAtTime(.16,t+.025);
+    gain.gain.setValueAtTime(.16,t+.20);
+    gain.gain.exponentialRampToValueAtTime(.0001,t+.34);
+    filter.connect(gain);gain.connect(this.master);
+    let ended=0;
+    for (const frequency of [330,415]) {
+      const tone=c.createOscillator();tone.type="sawtooth";
+      tone.frequency.setValueAtTime(frequency*1.06,t);
+      tone.frequency.exponentialRampToValueAtTime(frequency,t+.08);
+      tone.connect(filter);tone.start(t);tone.stop(t+.36);
+      tone.onended=()=>{tone.disconnect();if(++ended===2){filter.disconnect();gain.disconnect();}};
+    }
+  }
+
   suspendRace() {
     this.racing = false;
     if (!this.context || !this.layers) return;

@@ -416,3 +416,7 @@ button:disabled {
 .stage-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; color: #f0e3c8; }
 .stage-picker select { padding: 10px; background: #253b30; color: #fff3d8; border: 1px solid #788470; border-radius: 6px; font: inherit; }
 .stage-picker span { font-size: 12px; opacity: .7; }
+
+#dashboard-horn { position:absolute; pointer-events:auto; background:transparent; border:0; padding:0; margin:0; box-shadow:none; transform:none; cursor:pointer; touch-action:manipulation; }
+#dashboard-horn:hover, #dashboard-horn:active { background:transparent; }
+#dashboard-horn:focus-visible { outline:2px solid #ffe6a3; outline-offset:3px; }

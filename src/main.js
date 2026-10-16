@@ -26,7 +26,7 @@ import { AI_DRIVERS, aiInput } from "./ai.js";
 import { SnapshotBuffer } from "./replication.js";
 import { createVehicleThumbnails } from "./thumbnails.js";
 import { disposeVehicle } from "./resources.js";
-import { addDashboardSwitch, updateDashboardSwitch } from "./dashboard-switch.js";
+import { addDashboardSwitch, updateDashboardSwitch, updateDashboardHorn } from "./dashboard-switch.js";
 
 document.querySelector("#app").innerHTML = `<canvas class="game"></canvas>
 <section class="screen" id="home"><div class="content"><div class="eyebrow">The countryside is calling · Est. 1975</div><div class="rule"></div><h1>Hollow<br><i>Run.</i></h1><p>Ten drivers. Two miles. Nothing but gravity.<br>A homemade soapbox derby down the old farm road.</p><div class="actions"><button class="primary" id="garage-btn">Take the wheel ↗</button><button id="family-btn">Family race</button></div><div class="help">BUILT BY HAND. DRIVEN BY FEEL.</div></div><div class="top-mark">SOAPBOX DERBY / 01</div><div class="footer">3218 METRES OF DIRT &nbsp; / &nbsp; ONE WAY DOWN</div></section>
@@ -36,6 +36,7 @@ document.querySelector("#app").innerHTML = `<canvas class="game"></canvas>
 <div class="swipe-zone swipe-left" data-side="left" aria-label="Left thumb swipe area"><span class="swipe-arrow">↑</span><span>SLOW / REVERSE</span><i></i><strong>SWIPE</strong><span>FORWARD</span><span class="swipe-arrow">↓</span></div>
 <div class="swipe-zone swipe-right" data-side="right" aria-label="Right thumb swipe area"><span class="swipe-arrow">↑</span><span>SLOW / REVERSE</span><i></i><strong>SWIPE</strong><span>FORWARD</span><span class="swipe-arrow">↓</span></div>
 <div class="brake-feedback">HANDBRAKE · RELEASE A THUMB TO ROLL</div>
+<button id="dashboard-horn" aria-label="Honk dashboard horn" title="Honk horn (H)"></button>
 <button id="dashboard-light" aria-label="Toggle physical dashboard headlight switch" aria-pressed="false" title="Headlight switch (L)"></button>
 </div>
 <button class="race-menu hidden" id="pause">Garage ↗</button>
@@ -706,6 +707,16 @@ for (const zone of document.querySelectorAll(".swipe-zone")) {
   zone.addEventListener("pointercancel", controls._onPointerUp);
   zone.addEventListener("lostpointercapture", controls._onPointerUp);
 }
+let hornPressedUntil = 0;
+function honk() {
+  if (!running) return;
+  hornPressedUntil=performance.now()+250;
+  audio.honk();
+}
+$("#dashboard-horn").onclick = honk;
+window.addEventListener("keydown", event => {
+  if(event.code==="KeyH" && !event.repeat && !event.target?.isContentEditable && !["INPUT","TEXTAREA","SELECT"].includes(event.target?.tagName)) honk();
+});
 $("#dashboard-light").onclick = () => {
   controls.input.headlight = !controls.input.headlight;
 };
@@ -810,6 +821,7 @@ function animate(now) {
     );
     camera.lookAt(target);
     updateDashboardSwitch(THREE, car, camera, $("#dashboard-light"), input.headlight, innerWidth, innerHeight);
+    updateDashboardHorn(THREE, car, camera, $("#dashboard-horn"), performance.now()<hornPressedUntil, innerWidth, innerHeight);
     const strokes = [input.leftPaddle, input.rightPaddle];
     strokes.forEach((on, i) => {
       if (on && !lastStroke[i]) audio.stroke?.(i ? 1 : -1);
