@@ -2,79 +2,117 @@
 export function setupGraphics(THREE, renderer, scene) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.35;
+  renderer.toneMappingExposure = 1.15;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 256;
-  const ctx = canvas.getContext("2d");
-  const image = ctx.createImageData(256, 256);
   let seed = 72931;
   const random = () =>
     (seed = (1664525 * seed + 1013904223) >>> 0) / 4294967296;
-  for (let i = 0; i < image.data.length; i += 4) {
-    const v = 122 + Math.floor(random() * 42);
-    image.data[i] = v + 12;
-    image.data[i + 1] = v - 2;
-    image.data[i + 2] = v - 24;
-    image.data[i + 3] = 255;
+  const clampByte = value => Math.max(0, Math.min(255, value));
+  // Scene ribbon UVs run across the entire road in U and 0..1 along 3218 m in V.
+  // Two hundred repeats put one tile every 16 m, so gravel does not stretch.
+  function soilMaps(size, rutted) {
+    const makeCanvas = () => { const canvas = document.createElement('canvas'); canvas.width = canvas.height = size; return canvas; };
+    const colorCanvas = makeCanvas(), normalCanvas = makeCanvas(), roughCanvas = makeCanvas();
+    const colorContext = colorCanvas.getContext('2d'), normalContext = normalCanvas.getContext('2d'), roughContext = roughCanvas.getContext('2d');
+    const colorImage = colorContext.createImageData(size, size);
+    const normalImage = normalContext.createImageData(size, size);
+    const roughImage = roughContext.createImageData(size, size);
+    const height = new Float32Array(size * size);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const u = x / size, v = y / size;
+      const broad = 8 * Math.sin(v * Math.PI * 8 + Math.sin(u * 11) * .9) + 5 * Math.sin(u * 23 + v * 17);
+      const grain = (random() - .5) * 40;
+      let groove = 0, tread = 0;
+      if (rutted) for (const center of [.275, .725]) {
+        const meander = .009 * Math.sin(v * Math.PI * 8 + center * 19);
+        const distance = Math.abs(u - center - meander);
+        groove += Math.exp(-Math.pow(distance / .058, 2));
+        tread += Math.exp(-Math.pow(distance / .043, 2)) * Math.pow(Math.sin(v * Math.PI * 46 + u * 14), 8);
+      }
+      const pebble = random() < .026 ? 28 + random() * 36 : 0;
+      const value = 177 + broad + grain + pebble - groove * 43 - tread * 10;
+      const i = (y * size + x) * 4;
+      colorImage.data[i] = clampByte(value + 11);
+      colorImage.data[i + 1] = clampByte(value + 1);
+      colorImage.data[i + 2] = clampByte(value - 14);
+      colorImage.data[i + 3] = 255;
+      height[y * size + x] = broad * .25 + grain * .28 + pebble * .34 - groove * 12 - tread * 5;
+      const rough = clampByte(218 + grain * .5 - groove * 24 - pebble * .8);
+      roughImage.data[i] = roughImage.data[i + 1] = roughImage.data[i + 2] = rough;
+      roughImage.data[i + 3] = 255;
+    }
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const left = height[y * size + (x + size - 1) % size], right = height[y * size + (x + 1) % size];
+      const up = height[((y + size - 1) % size) * size + x], down = height[((y + 1) % size) * size + x];
+      const i = (y * size + x) * 4;
+      normalImage.data[i] = clampByte(128 + (left - right) * .75);
+      normalImage.data[i + 1] = clampByte(128 + (up - down) * .75);
+      normalImage.data[i + 2] = 245;
+      normalImage.data[i + 3] = 255;
+    }
+    colorContext.putImageData(colorImage, 0, 0);
+    normalContext.putImageData(normalImage, 0, 0);
+    roughContext.putImageData(roughImage, 0, 0);
+    const textures = [colorCanvas, normalCanvas, roughCanvas].map(canvas => {
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(1, 200);
+      texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      return texture;
+    });
+    textures[0].colorSpace = THREE.SRGBColorSpace;
+    return textures;
   }
-  ctx.putImageData(image, 0, 0);
-  // Two broad, irregular wheel ruts make the track read as used earth at speed.
-  for (const x of [72, 184]) {
-    const rut = ctx.createLinearGradient(x - 19, 0, x + 19, 0);
-    rut.addColorStop(0, "rgba(52,37,25,0)");
-    rut.addColorStop(0.48, "rgba(52,37,25,.26)");
-    rut.addColorStop(0.52, "rgba(52,37,25,.26)");
-    rut.addColorStop(1, "rgba(52,37,25,0)");
-    ctx.fillStyle = rut;
-    ctx.fillRect(x - 19, 0, 38, 256);
-  }
-  for (let i = 0; i < 170; i++) {
-    ctx.fillStyle =
-      random() < 0.5 ? "rgba(58,45,31,.16)" : "rgba(238,211,165,.13)";
-    ctx.beginPath();
-    ctx.ellipse(
-      random() * 256,
-      random() * 256,
-      1 + random() * 8,
-      0.5 + random() * 3,
-      random() * 6.28,
-      0,
-      6.28,
-    );
-    ctx.fill();
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(1, 50);
-  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  const normalCanvas = document.createElement("canvas");
-  normalCanvas.width = normalCanvas.height = 256;
-  const normalContext = normalCanvas.getContext("2d");
-  const normalImage = normalContext.createImageData(256, 256);
-  for (let i = 0; i < normalImage.data.length; i += 4) {
-    normalImage.data[i] = 112 + random() * 32;
-    normalImage.data[i + 1] = 112 + random() * 32;
-    normalImage.data[i + 2] = 242;
-    normalImage.data[i + 3] = 255;
-  }
-  normalContext.putImageData(normalImage, 0, 0);
-  const dirtNormal = new THREE.CanvasTexture(normalCanvas);
-  dirtNormal.wrapS = dirtNormal.wrapT = THREE.RepeatWrapping;
-  dirtNormal.repeat.copy(texture.repeat);
+  const [texture, dirtNormal, dirtRoughness] = soilMaps(512, true);
+  const [shoulderTexture, shoulderNormal, shoulderRoughness] = soilMaps(256, false);
   const road = scene.children.find(
     (object) => object.isMesh && object.material?.color?.getHex() === 0x927450,
   );
   if (road) {
     road.material.map = texture;
     road.material.normalMap = dirtNormal;
-    road.material.normalScale.set(0.62, 0.62);
+    road.material.roughnessMap = dirtRoughness;
+    road.material.normalScale.set(.48, .48);
     road.material.color.setHex(0xd2b895);
     road.material.needsUpdate = true;
     road.receiveShadow = true;
+  }
+  const shoulders = scene.children.filter(object => object.isMesh && object.material?.color?.getHex() === 0x8a7959);
+  for (const shoulder of shoulders) {
+    shoulder.material.map = shoulderTexture;
+    shoulder.material.normalMap = shoulderNormal;
+    shoulder.material.roughnessMap = shoulderRoughness;
+    shoulder.material.normalScale.set(.33, .33);
+    // Keep the base color recognized by weather stage material switching.
+    shoulder.material.color.setHex(0x8a7959);
+    shoulder.material.needsUpdate = true;
+  }
+
+  // Break up the distant fields as well as the road: dry grass, earth and moss.
+  const fieldCanvas = document.createElement("canvas");
+  fieldCanvas.width = fieldCanvas.height = 256;
+  const fieldContext = fieldCanvas.getContext("2d");
+  const fieldImage = fieldContext.createImageData(256,256);
+  for (let y=0;y<256;y++) for(let x=0;x<256;x++) {
+    const patch = Math.sin(x*.05 + Math.sin(y*.04)*2)*Math.cos(y*.07) + .4*Math.sin(x*.17+y*.13);
+    const grain = (random()-.5)*26;
+    const i=(y*256+x)*4;
+    fieldImage.data[i]=112+patch*17+grain;
+    fieldImage.data[i+1]=125+patch*12+grain;
+    fieldImage.data[i+2]=82+patch*11+grain;
+    fieldImage.data[i+3]=255;
+  }
+  fieldContext.putImageData(fieldImage,0,0);
+  const fieldTexture = new THREE.CanvasTexture(fieldCanvas);
+  fieldTexture.colorSpace = THREE.SRGBColorSpace;
+  fieldTexture.wrapS=fieldTexture.wrapT=THREE.RepeatWrapping;
+  fieldTexture.repeat.set(3,150);
+  fieldTexture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+  for(const mesh of scene.children) if(mesh.isMesh && mesh.material?.vertexColors && mesh.material.color?.getHex()===0xffffff) {
+    mesh.material.map=fieldTexture;
+    mesh.material.needsUpdate=true;
   }
 
   const sun = scene.children.find((object) => object.isDirectionalLight);
@@ -374,6 +412,7 @@ export function setupGraphics(THREE, renderer, scene) {
       beam.quaternion.setFromUnitVectors(up, beamDirection);
     },
     dispose() {
+      fieldTexture.dispose();
       scene.remove(headlight, headlight.target);
       scene.remove(beam);
       beam.geometry.dispose();
@@ -381,13 +420,25 @@ export function setupGraphics(THREE, renderer, scene) {
       headlight.dispose();
       texture.dispose();
       dirtNormal.dispose();
+      dirtRoughness.dispose();
+      shoulderTexture.dispose();
+      shoulderNormal.dispose();
+      shoulderRoughness.dispose();
       skyTexture.dispose();
       envTarget.dispose();
       scene.environment = null;
       splash.remove();
       if (road) {
         road.material.map = null;
+        road.material.normalMap = null;
+        road.material.roughnessMap = null;
         road.material.needsUpdate = true;
+      }
+      for (const shoulder of shoulders) {
+        shoulder.material.map = null;
+        shoulder.material.normalMap = null;
+        shoulder.material.roughnessMap = null;
+        shoulder.material.needsUpdate = true;
       }
       waterMaterials.forEach((material, i) => {
         material.onBeforeCompile = priorWaterShaders[i];

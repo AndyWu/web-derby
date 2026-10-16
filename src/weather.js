@@ -10,8 +10,12 @@ export function createWeather(THREE, scene, renderer) {
     sunColor: sun?.color.clone(), sunIntensity: sun?.intensity,
     skyColor: hemisphere?.color.clone(), groundColor: hemisphere?.groundColor.clone(), hemiIntensity: hemisphere?.intensity,
   };
-  const materials = [...new Set(scene.children.flatMap(object => object.isMesh || object.isInstancedMesh
-    ? Array.isArray(object.material) ? object.material : [object.material] : []))];
+  const materialSet = new Set();
+  scene.traverse(object => {
+    if (!object.isMesh && !object.isInstancedMesh) return;
+    for (const material of Array.isArray(object.material) ? object.material : [object.material]) materialSet.add(material);
+  });
+  const materials = [...materialSet];
   const original = new Map(materials.map(material => [material, {
     color: material.color?.clone(), map: material.map, roughness: material.roughness,
     metalness: material.metalness, vertexColors: material.vertexColors,
@@ -90,19 +94,22 @@ export function createWeather(THREE, scene, renderer) {
       if ('metalness' in material) material.metalness = saved.metalness;
       material.vertexColors = saved.vertexColors;
       const base = colorOf(material);
+      const role = material.userData.weatherRole;
+      const isGround = terrainColors.has(base) && !role;
+      const isFoliage = role === "foliage" || foliageColors.has(base);
       if (index === 1) {
-        if (terrainColors.has(base)) {
+        if (isGround || role === "roof") {
           material.color.setHex(base === 0xd2b895 || base === 0x927450 ? 0xdde4e5 : 0xeaf0ed);
           material.map = null;
           material.vertexColors = false;
           material.roughness = .94;
-        } else if (foliageColors.has(base)) material.color.setHex(0xbacdc1);
+        } else if (isFoliage) material.color.setHex(0xbacdc1);
       } else if (index === 2) {
-        if (terrainColors.has(base)) material.color.multiplyScalar(.48);
-        else if (foliageColors.has(base)) material.color.multiplyScalar(.34);
+        if (isGround) material.color.multiplyScalar(.48);
+        else if (isFoliage) material.color.multiplyScalar(.34);
       } else if (index === 3) {
-        if (terrainColors.has(base)) { material.color.multiplyScalar(.52); material.roughness = .52; }
-        else if (foliageColors.has(base)) material.color.multiplyScalar(.7);
+        if (isGround || role === "roof") { material.color.multiplyScalar(.52); material.roughness = .52; }
+        else if (isFoliage) material.color.multiplyScalar(.7);
         if (base === 0x557178 || base === 0x463b2b) material.roughness = .16;
       }
       material.needsUpdate = true;

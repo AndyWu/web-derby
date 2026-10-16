@@ -119,8 +119,24 @@ function rng(seed) {
 
 export function createEnvironment(THREE, scene) {
   const random = rng(197802);
+  const roadCanvas = document.createElement("canvas");
+  roadCanvas.width = roadCanvas.height = 128;
+  const roadContext = roadCanvas.getContext("2d");
+  roadContext.fillStyle = "#dfd5bc";
+  roadContext.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 900; i++) {
+    roadContext.fillStyle = i % 3 ? "rgba(54,43,32,.14)" : "rgba(255,247,212,.22)";
+    roadContext.fillRect(random() * 128, random() * 128, .4 + random() * 2.5, .4 + random() * 4);
+  }
+  for (const x of [30, 97]) {
+    roadContext.fillStyle = "rgba(74,61,44,.08)";
+    roadContext.fillRect(x, 0, 12, 128);
+  }
+  const roadTexture = new THREE.CanvasTexture(roadCanvas);
+  roadTexture.wrapS = roadTexture.wrapT = THREE.RepeatWrapping;
   const roadMat = new THREE.MeshStandardMaterial({
     color: 0x927450,
+    map: roadTexture,
     roughness: 1,
   });
   const shoulderMat = new THREE.MeshStandardMaterial({
@@ -167,9 +183,25 @@ export function createEnvironment(THREE, scene) {
     map: barkTexture,
     roughness: 1,
   });
-  const leafMats = [0x526e33, 0x67813a, 0x486833, 0x718946].map(
-    (color) => new THREE.MeshStandardMaterial({ color, roughness: 1 }),
-  );
+  trunkMat.userData.weatherRole = "wood";
+  const leafCanvas = document.createElement("canvas");
+  leafCanvas.width = leafCanvas.height = 128;
+  const leafContext = leafCanvas.getContext("2d");
+  leafContext.fillStyle = "#9fae87";
+  leafContext.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 420; i++) {
+    leafContext.fillStyle = i % 4 === 0 ? "#c2ceaa" : i % 3 === 0 ? "#647a55" : "#839970";
+    const x = random() * 128, y = random() * 128;
+    leafContext.beginPath();
+    leafContext.ellipse(x, y, 2 + random() * 3, 1 + random() * 2, random() * 6.28, 0, 6.28);
+    leafContext.fill();
+  }
+  const leafTexture = new THREE.CanvasTexture(leafCanvas);
+  const leafMats = [0x526e33, 0x67813a, 0x486833, 0x718946].map((color) => {
+    const material = new THREE.MeshStandardMaterial({ color, map: leafTexture, roughness: 1, side: THREE.DoubleSide });
+    material.userData.weatherRole = "foliage";
+    return material;
+  });
   const objects = [];
   const add = (object) => {
     scene.add(object);
@@ -295,9 +327,45 @@ export function createEnvironment(THREE, scene) {
   }
 
   const dummy = new THREE.Object3D();
+  const canopyGeometry = new THREE.SphereGeometry(1, 10, 7);
+  const canopyPosition = canopyGeometry.attributes.position;
+  for (let i = 0; i < canopyPosition.count; i++) {
+    const x = canopyPosition.getX(i), y = canopyPosition.getY(i), z = canopyPosition.getZ(i);
+    const lobes = 1 + .105 * Math.sin(x * 9 + z * 4) * Math.cos(y * 11 - x * 3) + .075 * Math.sin(z * 13 + y * 5);
+    canopyPosition.setXYZ(i, x * lobes, y * lobes, z * lobes);
+  }
+  canopyPosition.needsUpdate = true;
+  canopyGeometry.computeVertexNormals();
+  function branchedTrunkGeometry() {
+    const positions = [], uvs = [], indices = [];
+    const limb = (from, to, bottom, top) => {
+      const base = positions.length / 3, sides = 7;
+      for (let ring = 0; ring < 2; ring++) {
+        const p = ring ? to : from, radius = ring ? top : bottom;
+        for (let j = 0; j < sides; j++) {
+          const angle = j * Math.PI * 2 / sides;
+          positions.push(p[0] + Math.cos(angle) * radius, p[1], p[2] + Math.sin(angle) * radius);
+          uvs.push(j / sides, ring);
+        }
+      }
+      for (let j = 0; j < sides; j++) {
+        const a = base + j, b = base + (j + 1) % sides;
+        indices.push(a, a + sides, b, b, a + sides, b + sides);
+      }
+    };
+    limb([0, 0, 0], [0, .72, 0], .065, .027);
+    limb([0, .38, 0], [.27, .85, .13], .027, .009);
+    limb([0, .45, 0], [-.23, .82, -.12], .027, .009);
+    limb([0, .53, 0], [.13, .92, -.23], .022, .008);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(indices); geometry.computeVertexNormals();
+    return geometry;
+  }
   const trees = Array.from({ length: 4 }, (_, j) => {
     const mesh = new THREE.InstancedMesh(
-      new THREE.IcosahedronGeometry(1, 1),
+      canopyGeometry,
       leafMats[j],
       1400,
     );
@@ -309,7 +377,7 @@ export function createEnvironment(THREE, scene) {
   });
   const trunks = add(
     new THREE.InstancedMesh(
-      new THREE.CylinderGeometry(0.21, 0.29, 1, 5),
+      branchedTrunkGeometry(),
       trunkMat,
       4200,
     ),
@@ -317,16 +385,20 @@ export function createEnvironment(THREE, scene) {
   trunks.count = 0;
   trunks.castShadow = true;
   const bladeGeometry = new THREE.BufferGeometry();
-  bladeGeometry.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute(
-      [
-        -0.22, 0, 0, 0.22, 0, 0, 0.03, 0.8, -0.04, 0, 0, -0.22, 0, 0, 0.22,
-        -0.05, 0.65, 0.02, -0.16, 0, -0.13, 0.16, 0, 0.13, 0.02, 0.72, 0.01,
-      ],
-      3,
-    ),
-  );
+  const bladePositions = [], bladeIndices = [];
+  for (let blade = 0; blade < 5; blade++) {
+    const angle = blade * Math.PI * 2 / 5, c = Math.cos(angle), sn = Math.sin(angle);
+    const height = .58 + (blade % 3) * .13, bend = .10 + (blade % 2) * .06;
+    const width = .035 + (blade % 2) * .012, base = bladePositions.length / 3;
+    for (const [distance, y, half] of [[0, 0, width], [bend * .45, height * .55, width * .55], [bend, height, 0]]) {
+      bladePositions.push(c * distance - sn * half, y, sn * distance + c * half);
+      bladePositions.push(c * distance + sn * half, y, sn * distance - c * half);
+    }
+    bladeIndices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2,
+      base + 2, base + 3, base + 4, base + 3, base + 5, base + 4);
+  }
+  bladeGeometry.setAttribute("position", new THREE.Float32BufferAttribute(bladePositions, 3));
+  bladeGeometry.setIndex(bladeIndices);
   bladeGeometry.computeVertexNormals();
   const tufts = add(new THREE.InstancedMesh(bladeGeometry, grassMat, 12000));
   tufts.count = 0;
@@ -379,7 +451,8 @@ export function createEnvironment(THREE, scene) {
         const x = p.x + nx * offset,
           z = p.z + nz * offset,
           y = p.y + terrainRise(s, offset) - 0.38;
-        put(trunks, x, y + h * 0.31, z, 1 + random() * 0.8, h * 0.63, 1);
+        const trunkWidth = h * (0.32 + random() * 0.08);
+        put(trunks, x, y, z, trunkWidth, h, trunkWidth, random() * 6.28);
         for (let crown = 0; crown < 3; crown++) {
           const foliage = trees[Math.floor(random() * trees.length)];
           const spread = h * (crown === 0 ? 0 : 0.16);
@@ -450,23 +523,48 @@ export function createEnvironment(THREE, scene) {
         );
     }
   }
-  // Simple farm buildings give the long descent readable landmarks.
+  // Barns and farmhouses break up the tree line along the descent.
   const wallMat = new THREE.MeshStandardMaterial({
     color: 0xa74232,
     roughness: 1,
   });
+  wallMat.userData.weatherRole = "wall";
   const plankMat = new THREE.MeshStandardMaterial({
     color: 0x713b2c,
     roughness: 1,
   });
+  plankMat.userData.weatherRole = "wood";
   const roofMat = new THREE.MeshStandardMaterial({
     color: 0x62574a,
     roughness: 1,
   });
+  roofMat.userData.weatherRole = "roof";
   const cream = new THREE.MeshStandardMaterial({
     color: 0xdacba1,
     roughness: 1,
   });
+  cream.userData.weatherRole = "wall";
+  const houseWall = new THREE.MeshStandardMaterial({ color: 0xb7a98a, roughness: 1 });
+  houseWall.userData.weatherRole = "wall";
+  const glass = new THREE.MeshStandardMaterial({ color: 0x667e82, roughness: .28, metalness: .13 });
+  glass.userData.weatherRole = "wall";
+  const stone = new THREE.MeshStandardMaterial({ color: 0x8b897b, roughness: 1 });
+  stone.userData.weatherRole = "wall";
+  const box = (group, w, h, d, material, x, y, z, cast = false) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    mesh.position.set(x, y, z); mesh.castShadow = cast; group.add(mesh); return mesh;
+  };
+  const gable = (group, width, wallHeight, ridgeHeight, depth, material) => {
+    const vertices = [];
+    for (const z of [-depth / 2 - .015, depth / 2 + .015])
+      vertices.push(-width / 2, wallHeight, z, width / 2, wallHeight, z, 0, ridgeHeight, z);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex([0, 1, 2, 3, 5, 4]); geometry.computeVertexNormals();
+    const faceMat = new THREE.MeshStandardMaterial({ color: material.color, side: THREE.DoubleSide, roughness: 1 });
+    faceMat.userData.weatherRole = "wall";
+    group.add(new THREE.Mesh(geometry, faceMat));
+  };
   for (const s of [76, 165, 282, 590, 1080, 1530, 2080, 2650, 3050]) {
     const p = roadAt(s),
       side = s % 2 ? -1 : 1;
@@ -480,51 +578,60 @@ export function createEnvironment(THREE, scene) {
     group.rotation.y =
       -Math.atan(roadDx(s)) +
       (side * Math.PI) / 2;
-    const body = new THREE.Mesh(new THREE.BoxGeometry(11, 6, 16), wallMat);
-    body.position.y = 3;
-    body.castShadow = true;
-    group.add(body);
+    const isHouse = [76, 282, 1080, 2080, 3050].includes(s);
+    const w = isHouse ? 9 : 11, h = isHouse ? 5.3 : 6, d = isHouse ? 11 : 16;
+    const wall = isHouse ? houseWall : wallMat;
+    box(group, w, h, d, wall, 0, h / 2, 0, true);
+    gable(group, w, h, isHouse ? 8.2 : 9.5, d, wall);
+    if (!isHouse) {
+      for (let k = -5; k <= 5; k++) {
+        box(group, .075, 5.8, .07, plankMat, k, 3, d / 2 + .045);
+        box(group, .075, 5.8, .07, plankMat, k, 3, -d / 2 - .045);
+      }
+      for (const x of [-w / 2 - .045, w / 2 + .045])
+        for (let z = -6; z <= 6; z += 2)
+          box(group, .07, 5.8, .075, plankMat, x, 3, z);
+    } else {
+      for (let y = .45; y < h; y += .68) {
+        box(group, w + .08, .055, .07, cream, 0, y, d / 2 + .045);
+        box(group, w + .08, .055, .07, cream, 0, y, -d / 2 - .045);
+      }
+    }
     for (const roofSide of [-1, 1]) {
       const roof = new THREE.Mesh(
-        new THREE.BoxGeometry(7.05, 0.25, 17.8),
+        new THREE.BoxGeometry(isHouse ? 5.75 : 7.05, 0.25, isHouse ? 12.3 : 17.8),
         roofMat,
       );
-      roof.position.set(roofSide * 2.95, 8.05, 0);
-      roof.rotation.z = -roofSide * 0.51;
+      roof.position.set(roofSide * (isHouse ? 2.35 : 2.95), isHouse ? 6.7 : 8.05, 0);
+      roof.rotation.z = -roofSide * (isHouse ? .54 : 0.51);
       roof.castShadow = true;
       group.add(roof);
     }
-    const door = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 4.9), plankMat);
-    door.position.set(0, 2.45, 8.09);
-    group.add(door);
-    for (const slant of [-1, 1]) {
-      const brace = new THREE.Mesh(
-        new THREE.BoxGeometry(0.18, 5.6, 0.08),
-        cream,
-      );
-      brace.position.set(0, 2.45, 8.15);
-      brace.rotation.z = slant * 0.62;
-      group.add(brace);
+    const front = d / 2 + .09;
+    if (isHouse) {
+      box(group, 2.15, 3.75, .11, plankMat, 0, 1.88, front);
+      box(group, 8.5, .22, 2.7, plankMat, 0, 3.65, d / 2 + 1.5, true);
+      box(group, 8.5, .14, 3.1, stone, 0, .12, d / 2 + 1.5);
+      for (const x of [-3.8, 3.8]) box(group, .2, 3.3, .2, cream, x, 1.9, d / 2 + 2.7);
+      box(group, .85, 2.2, .85, stone, 2.7, 8.1, -2.5, true);
+      for (const x of [-2.85, 2.85]) {
+        box(group, 1.65, 1.75, .12, cream, x, 3.15, front);
+        box(group, 1.36, 1.45, .14, glass, x, 3.15, front + .08);
+        box(group, .085, 1.5, .16, cream, x, 3.15, front + .17);
+        box(group, 1.5, .085, .16, cream, x, 3.15, front + .17);
+      }
+    } else {
+      box(group, 3.8, 4.9, .12, plankMat, 0, 2.45, front);
+      for (const slant of [-1, 1]) {
+        const brace = box(group, .17, 5.4, .09, cream, 0, 2.45, front + .1);
+        brace.rotation.z = slant * .62;
+      }
+      box(group, 1.65, 1.25, .09, plankMat, 0, 7.3, front);
+      for (const x of [-3.5, 3.5]) {
+        box(group, 1.35, 1.35, .09, cream, x, 4.2, front);
+        box(group, 1.1, 1.1, .11, glass, x, 4.2, front + .08);
+      }
     }
-    for (let k = -5; k <= 5; k++) {
-      const plank = new THREE.Mesh(
-        new THREE.BoxGeometry(0.055, 5.8, 0.055),
-        plankMat,
-      );
-      plank.position.set(k, 3, 8.045);
-      group.add(plank);
-      const backPlank = plank.clone();
-      backPlank.position.z = -8.045;
-      group.add(backPlank);
-    }
-    for (const x of [-3.5, 3.5]) {
-      const window = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 1.3), cream);
-      window.position.set(x, 4.2, 8.08);
-      group.add(window);
-    }
-    const loft = new THREE.Mesh(new THREE.PlaneGeometry(1.65, 1.25), plankMat);
-    loft.position.set(0, 7, 8.95);
-    group.add(loft);
     add(group);
   }
   const signFace = (label, background = "#ead8a9", foreground = "#3f4b32") => {
