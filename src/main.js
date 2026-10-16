@@ -106,7 +106,7 @@ createEnvironment(THREE, scene);
 const graphics = setupGraphics(THREE, renderer, scene);
 const weather = createWeather(THREE, scene, renderer);
 const STAGES = ["Countryside", "Snow", "Night", "Heavy rain"];
-let stageIndex = 0, advanceStage = false;
+let stageIndex = 0;
 const camera = new THREE.PerspectiveCamera(
   68,
   innerWidth / innerHeight,
@@ -169,10 +169,6 @@ function choose(i) {
 }
 choose(0);
 function garage() {
-  if (advanceStage && net.role !== "guest") {
-    setStage((stageIndex + 1) % STAGES.length);
-    advanceStage = false;
-  }
   if (net.role === "host" && raceEpoch) net.broadcastRace?.(raceEpoch, 0, 0, stageIndex);
   running = false;
   controls.resetDrive();
@@ -200,7 +196,6 @@ function start(skipGuide = false) {
     return;
   }
   raceCompleted = false;
-  advanceStage = false;
   if (stageIndex === 2) controls.input.headlight = true;
   controls.resetDrive();
   snapshotBuffer.clear();
@@ -339,9 +334,9 @@ function setStage(index) {
 for (const container of [$("#garage .garage"), $("#lobby")]) {
   const label = document.createElement("label");
   label.className = "stage-picker";
-  label.innerHTML = `Race scenery <select class="stage-select" aria-label="Race scenery">${STAGES.map((name,i)=>`<option value="${i}">${i+1}. ${name}</option>`).join("")}</select><span>Next race: countryside → snow → night → heavy rain</span>`;
+  label.innerHTML = `Choose race loop <select class="stage-select" aria-label="Choose race loop">${STAGES.map((name,i)=>`<option value="${i}">${name} loop</option>`).join("")}</select><span>Pick any loop before starting. In family races, the host chooses.</span>`;
   container.prepend(label);
-  label.querySelector("select").onchange = event => { if (net.role !== "guest") { advanceStage = false; setStage(Number(event.target.value)); } };
+  label.querySelector("select").onchange = event => { if (net.role !== "guest") { setStage(Number(event.target.value)); } };
 }
 const garageActions = $("#garage .actions");
 $("#garage .garage").prepend(garageActions);
@@ -884,7 +879,6 @@ function animate(now) {
     }
     if (r.finished && !raceCompleted) {
       raceCompleted = true;
-      advanceStage = true;
       if (net.role !== "host") running = false;
       showModal($("#finish"));
       renderResults();
